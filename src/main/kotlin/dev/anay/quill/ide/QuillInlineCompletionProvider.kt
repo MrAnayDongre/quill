@@ -13,12 +13,14 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
 import dev.anay.quill.completion.Cleanup
+import dev.anay.quill.completion.ContextSnippet
 import dev.anay.quill.completion.FimPrompt
 import dev.anay.quill.completion.PromptBuilder
 import dev.anay.quill.completion.Shape
 import dev.anay.quill.completion.Verifier
 import dev.anay.quill.context.NeighbourFiles
 import dev.anay.quill.context.PsiVerifier
+import dev.anay.quill.context.RecentEdits
 import dev.anay.quill.context.SymbolContext
 import dev.anay.quill.settings.Exclusions
 import dev.anay.quill.settings.QuillSettings
@@ -59,14 +61,18 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
         val commentPrefix = LanguageCommenters.INSTANCE.forLanguage(language)?.lineCommentPrefix ?: "//"
         val windowStart = maxOf(0, caret - windowChars)
         // Symbols first: they are the most specific, and the prompt drops what does not fit from the end.
-        val context = SymbolContext.collect(request.file, caret, windowStart, excludedPatterns) +
-            NeighbourFiles.collect(request.file.project, file, excludedPatterns)
+        val symbols = SymbolContext.collect(request.file, caret, windowStart, excludedPatterns)
+        val recent = RecentEdits.getInstance().snippets(file.name, document.getLineNumber(caret))
+        val context = symbols + recent + NeighbourFiles.collect(request.file.project, file, excludedPatterns)
         val prompt = PromptBuilder.build(before, after, context, commentPrefix, WINDOW_TOKENS)
         val shape = Shape(singleLine = after.substringBefore('\n').isNotBlank(), stops = Cleanup.stopsFor(language.id))
         // A manual request is an explicit ask, so it skips the typing debounce.
-        val verifier = if (verify && document.textLength <= MAX_VERIFIED_CHARS) PsiVerifier(request.file, document.text, caret, commentPrefix) else null
+        val verifier = if (verify && document.textLength <= MAX_VERIFIED_CHARS) PsiVerifier(request.file, document.text, caret, commentPrefix, identifiersIn(symbols)) else null
         return Input(prompt, shape, debounce = request.event !is InlineCompletionEvent.DirectCall, verifier = verifier)
     }
+
+    private fun identifiersIn(snippets: List<ContextSnippet>): Set<String> =
+        snippets.flatMapTo(HashSet()) { snippet -> IDENTIFIER.findAll(snippet.text).map { it.value }.asIterable() }
 
     private fun editorOf(event: InlineCompletionEvent): Editor? = when (event) {
         is InlineCompletionEvent.DocumentChange -> event.editor
@@ -77,6 +83,7 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
     private companion object {
         // ponytail: fixed prompt window; promote to a setting for models with small contexts.
         const val WINDOW_TOKENS = 1500
+        val IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
         // ponytail: very large files are not re-parsed per line; raise it if parsing proves cheap enough.
         const val MAX_VERIFIED_CHARS = 300_000
     }

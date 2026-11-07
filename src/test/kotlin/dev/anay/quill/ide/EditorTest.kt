@@ -2,6 +2,7 @@ package dev.anay.quill.ide
 
 import com.intellij.codeInsight.inline.completion.InlineCompletion
 import com.intellij.codeInsight.inline.completion.session.InlineCompletionContext
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
@@ -90,5 +91,20 @@ class EditorTest : BasePlatformTestCase() {
         assertTrue(request, request.contains("members of Greeter"))
         assertTrue(request, request.contains("public String greet(String name, int times)"))
         assertFalse(request, request.contains("secret"))
+    }
+
+    fun testARecentEditInAnotherFileIsSentAsContext() {
+        val notes = myFixture.addFileToProject("Notes.java", "class Notes {}\n")
+        WriteCommandAction.runWriteCommandAction(project) { myFixture.getDocument(notes).insertString(0, "// greetings are polite\n") }
+        firstAnswer = listOf("reet(\\\"x\\\", 1)")
+        repairedAnswer = firstAnswer
+        myFixture.addFileToProject("Greeter.java", "public class Greeter {\n    public String greet(String name, int times) { return name; }\n}\n")
+        myFixture.configureByText("Main.java", "class Main {\n    void run(Greeter greeter) {\n        greeter.<caret>\n    }\n}\n")
+        if (InlineCompletion.getHandlerOrNull(myFixture.editor) == null) {
+            InlineCompletion.install(myFixture.editor as EditorEx, CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scope = it })
+        }
+        myFixture.type("g")
+        PlatformTestUtil.waitWithEventsDispatching("no ghost text appeared", { !ghostText().isNullOrEmpty() }, 10)
+        assertTrue(bodies.last(), bodies.last().contains("Notes.java:1: // greetings are polite"))
     }
 }

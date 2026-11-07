@@ -7,6 +7,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.wm.WindowManager
@@ -79,6 +80,7 @@ class QuillService(private val scope: CoroutineScope) : Disposable {
     }
 
     private fun notifyFailure(message: String) {
+        LOG.warn("Quill is not producing suggestions: $message")
         NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
             .createNotification(QuillBundle.message("notification.title"), message, NotificationType.WARNING)
             .addAction(NotificationAction.createSimple(QuillBundle.message("notification.open.settings")) {
@@ -90,6 +92,7 @@ class QuillService(private val scope: CoroutineScope) : Disposable {
     override fun dispose() = backend.close()
 
     companion object {
+        private val LOG = logger<QuillService>()
         const val NOTIFICATION_GROUP = "Quill"
         // ponytail: fixed limits; promote to settings if users need to tune them.
         private const val REQUEST_TIMEOUT_MS = 10_000L

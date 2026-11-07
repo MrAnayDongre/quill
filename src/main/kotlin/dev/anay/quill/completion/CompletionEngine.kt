@@ -4,6 +4,7 @@ import dev.anay.quill.backend.BackendException
 import dev.anay.quill.backend.CompletionBackend
 import dev.anay.quill.backend.CompletionRequest
 import dev.anay.quill.backend.NotConfiguredException
+import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
@@ -82,8 +83,19 @@ internal class CompletionEngine(
                         final && pending.isNotEmpty() -> pending.toString()
                         else -> return
                     }
-                    failure = verifier?.problems(whole.toString() + line)
-                    if (failure == null) { pending.delete(0, line.length); show(line) }
+                    var shown = line
+                    val problems = verifier?.problems(whole.toString() + line)
+                    var blocked = problems
+                    if (problems != null && verifier != null) {
+                        val fixed = problems.fixes.takeIf { it.keys.containsAll(problems.names) }?.let { NameRepair.apply(line, it) }
+                        if (fixed != null && verifier.problems(whole.toString() + fixed) == null) {
+                            stats.autoFixed()
+                            shown = fixed
+                            blocked = null
+                        }
+                    }
+                    failure = blocked
+                    if (failure == null) { pending.delete(0, line.length); show(shown) }
                 }
             }
 
@@ -107,6 +119,7 @@ internal class CompletionEngine(
                 var repairs = 0
                 while (problems != null) {
                     stats.caught(problems.names.size)
+                    LOG.debug("Candidate used ${problems.names.size} unknown names")
                     if (repairs++ == MAX_REPAIRS) break
                     problems = pass(FimPrompt(problems.hint + key.prompt.prefix + whole, key.prompt.suffix))
                     if (problems == null) stats.repaired()
@@ -136,6 +149,7 @@ internal class CompletionEngine(
     }
 
     companion object {
+        private val LOG = logger<CompletionEngine>()
         private const val SINGLE_LINE_TOKENS = 48
         private const val MAX_REPAIRS = 1
         // ponytail: fixed budget; promote to a setting if users need to tune it.

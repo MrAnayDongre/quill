@@ -8,6 +8,8 @@
 - OpenAI compatible backend for completions (fill in the middle) and chat completions endpoints
 - Early stop at a stop sequence, a closing fence or the end of the line for single line suggestions
 - Debounce that shortens after structural characters, stale request cancellation and a cache of recent completions
+- Recent edits as context, with text from excluded files never kept
+- Deterministic repair of an invented name when exactly one real name clearly matches
 - Symbol aware context: enclosing scopes, members of the receiver's type, and declarations of symbols used near the caret
 - Verified ghost text: lines that use names the project does not define are held back and the model is asked again
 - Connection warm-up that sends no credentials

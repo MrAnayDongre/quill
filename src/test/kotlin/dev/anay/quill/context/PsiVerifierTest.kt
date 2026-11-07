@@ -26,6 +26,14 @@ class PsiVerifierTest : BasePlatformTestCase() {
         assertTrue(found.hint.startsWith("// Do not use these names"))
     }
 
+    fun testAnInventedNameComesWithTheRealOneItMostLikelyMeant() {
+        myFixture.addFileToProject("Greeter.java", "public class Greeter {\n    public String greetPerson(String name) { return name; }\n}\n")
+        myFixture.configureByText("Main.java", source)
+        val v = PsiVerifier(myFixture.file, myFixture.editor.document.text, myFixture.editor.caretModel.offset, "//", setOf("greetPerson", "Greeter"))
+        val found = problems(v, "greeter.greetPersonNow(\"x\");\n")!!
+        assertEquals(mapOf("greetPersonNow" to "greetPerson"), found.fixes)
+    }
+
     fun testNamesTheCandidateDeclaresItselfPass() {
         assertNull(problems(verifier(source), "int count = 3;\n        count = count + 1;\n"))
     }

@@ -40,6 +40,17 @@ internal class CompletionStats(private val window: Int = 50, private val onChang
         onChange()
     }
 
+    @Volatile
+    var autoFixes = 0
+        private set
+
+    /** An invented name that was replaced with the real one it most likely meant, without asking the model again. */
+    @Synchronized
+    fun autoFixed() {
+        autoFixes++
+        onChange()
+    }
+
     fun markOk() = set(State.OK)
 
     fun markNotConfigured() = set(State.NOT_CONFIGURED)

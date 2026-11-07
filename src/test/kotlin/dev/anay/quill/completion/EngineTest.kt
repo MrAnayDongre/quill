@@ -88,6 +88,30 @@ class EngineTest {
     }
 
     @Test
+    fun anInventedNameWithAClearRealMatchIsFixedWithoutAskingAgain() = runBlocking {
+        val withFix = Verifier { candidate ->
+            if (candidate.contains("bad")) Problems(listOf("bad"), "// hint\n", mapOf("bad" to "good")) else null
+        }
+        backend.answer = { "ok\nbad(1)\nrest\n" }
+        val out = engine.stream(prompt("p"), shape, verifier = withFix).toList().joinToString("")
+        assertEquals("ok\ngood(1)\nrest\n", out)
+        assertEquals(1, backend.requests.size)
+        assertEquals(1, stats.autoFixes)
+        assertEquals(0, stats.namesCaught)
+    }
+
+    @Test
+    fun aFixThatDoesNotCheckOutFallsBackToAskingAgain() = runBlocking {
+        val stillBad = Verifier { candidate ->
+            if (candidate.contains("bad")) Problems(listOf("bad"), "// Do not use: bad\n", mapOf("bad" to "bad2")) else null
+        }
+        backend.answer = { if (it.prompt.prefix.contains("Do not use")) "fine\n" else "bad\n" }
+        assertEquals("fine\n", engine.stream(prompt("p"), shape, verifier = stillBad).toList().joinToString(""))
+        assertEquals(2, backend.requests.size)
+        assertEquals(0, stats.autoFixes)
+    }
+
+    @Test
     fun withoutAVerifierTextIsShownAsItArrives() = runBlocking {
         backend.chunkSize = 2
         backend.answer = { "abcdefgh" }

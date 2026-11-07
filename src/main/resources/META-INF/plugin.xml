@@ -3,7 +3,13 @@
     <name>Quill</name>
     <vendor>Anay</vendor>
     <description><![CDATA[
-        <p>Inline code completion as ghost text, backed by any OpenAI compatible completions endpoint.</p>
+        <p>Inline code completion that streams as the model writes and checks itself against your project.</p>
+        <ul>
+            <li>Ghost text from any OpenAI compatible server: local (Ollama, llama.cpp, vLLM) or hosted.</li>
+            <li>Project aware: enclosing scopes, members of the type before the dot, declarations in use, recent edits.</li>
+            <li>Verified: lines that use names the project does not define are fixed or held back before they appear.</li>
+            <li>Live latency in the status bar. Your API key stays in the IDE password safe.</li>
+        </ul>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -15,6 +21,7 @@
         <applicationConfigurable parentId="tools" instance="dev.anay.quill.settings.QuillConfigurable"
                                  id="dev.anay.quill.settings" displayName="Quill"/>
         <statusBarWidgetFactory id="dev.anay.quill.status" implementation="dev.anay.quill.ide.QuillStatusBarFactory"/>
+        <editorFactoryDocumentListener implementation="dev.anay.quill.context.RecentEditsListener"/>
         <notificationGroup id="Quill" displayType="BALLOON" key="notification.group.name"/>
     </extensions>
 </idea-plugin>

@@ -8,6 +8,7 @@ import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.PsiPolyVariantReference
 import com.intellij.psi.PsiReference
 import com.intellij.psi.util.PsiTreeUtil
+import dev.anay.quill.completion.NameRepair
 import dev.anay.quill.completion.Problems
 import dev.anay.quill.completion.Verifier
 
@@ -21,12 +22,14 @@ internal class PsiVerifier(
     private val original: String,
     private val caret: Int,
     private val commentPrefix: String,
+    private val knownNames: Set<String> = emptySet(),
 ) : Verifier {
 
     override suspend fun problems(candidate: String): Problems? {
         val unknown = readAction { unknownNames(candidate) }
         if (unknown.isEmpty()) return null
-        return Problems(unknown, "$commentPrefix Do not use these names, they do not exist here: ${unknown.joinToString(", ")}\n")
+        val fixes = unknown.mapNotNull { name -> NameRepair.nearest(name, knownNames)?.let { name to it } }.toMap()
+        return Problems(unknown, "$commentPrefix Do not use these names, they do not exist here: ${unknown.joinToString(", ")}\n", fixes)
     }
 
     private fun unknownNames(candidate: String): List<String> {
