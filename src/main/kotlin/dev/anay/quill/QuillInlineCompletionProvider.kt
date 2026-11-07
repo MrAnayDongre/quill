@@ -5,13 +5,14 @@ import com.intellij.codeInsight.inline.completion.InlineCompletionProvider
 import com.intellij.codeInsight.inline.completion.InlineCompletionProviderID
 import com.intellij.codeInsight.inline.completion.InlineCompletionRequest
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionGrayTextElement
+import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSingleSuggestion
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSuggestion
-import com.intellij.codeInsight.inline.completion.suggestion.invoke
 import com.intellij.lang.LanguageCommenters
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
+import kotlinx.coroutines.flow.flowOf
 
 /** Stateless: everything that varies lives in [QuillService], so the provider can be created and dropped freely. */
 class QuillInlineCompletionProvider : InlineCompletionProvider {
@@ -31,7 +32,7 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
         val input = readAction { buildInput(request, state.excludedPatterns) } ?: return InlineCompletionSuggestion.Empty
         val text = QuillService.getInstance().engine.complete(input.prompt, input.shape, debounce = input.debounce)
             ?: return InlineCompletionSuggestion.Empty
-        return InlineCompletionSuggestion { variant { emit(InlineCompletionGrayTextElement(text)) } }
+        return InlineCompletionSingleSuggestion.build(elements = flowOf(InlineCompletionGrayTextElement(text)))
     }
 
     private class Input(val prompt: FimPrompt, val shape: Shape, val debounce: Boolean)

@@ -1,5 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -14,6 +15,13 @@ dependencies {
         intellijIdea("2026.2.3")
         testFramework(TestFrameworkType.Platform)
         testBundledPlugins("com.intellij.modules.ultimate")
+    }
+}
+
+kotlin {
+    compilerOptions {
+        // Keeps interface default methods of the platform from being re-declared in our classes.
+        jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
     }
 }
 

@@ -23,7 +23,7 @@ class QuillService : Disposable {
 
     private fun currentConfig(): EngineConfig {
         val state = QuillSettings.getInstance().state
-        return EngineConfig(state.maxTokens, state.debounceMs.toLong(), REQUEST_TIMEOUT_MS, LATENCY_BUDGET_MS)
+        return EngineConfig(state.maxTokens, state.debounceMs.toLong(), REQUEST_TIMEOUT_MS)
     }
 
     private fun notifyFailure(message: String) {
@@ -39,9 +39,8 @@ class QuillService : Disposable {
 
     companion object {
         const val NOTIFICATION_GROUP = "Quill"
-        // ponytail: fixed limits; promote to settings if users need to tune them.
+        // ponytail: fixed limit; promote to a setting if users need to tune it.
         private const val REQUEST_TIMEOUT_MS = 10_000L
-        private const val LATENCY_BUDGET_MS = 1_500L
 
         fun getInstance(): QuillService = service()
     }

@@ -1,8 +1,8 @@
 # Quill
 
-Inline code completion for JetBrains IDEs. Quill shows suggestions as ghost text while you type and talks to any server that implements the OpenAI completions API: llama.cpp, Ollama, vLLM, LM Studio, Codestral, OpenAI itself.
+Inline code completion for JetBrains IDEs. Quill shows suggestions as ghost text while you type and talks to any server that implements the OpenAI completions API: llama.cpp, Ollama and vLLM. The model must support fill in the middle through the `suffix` field.
 
-Press `Tab` to accept the whole suggestion. The platform's own actions accept the next word or the next line (see Settings | Keymap, "Insert Inline Completion Word" and "Insert Inline Completion Line").
+Press `Tab` to accept the whole suggestion. The platform also ships actions to accept the next word or the next line; bind them under Settings | Keymap by searching for "inline completion".
 
 ## Run it
 

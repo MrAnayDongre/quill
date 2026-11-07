@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Optional
 
 /** The only place the API key is kept. Reads are cached because the password safe can be slow. */
 @Service(Service.Level.APP)
@@ -16,20 +17,18 @@ class ApiKeyStore(private val scope: CoroutineScope) {
     private val attributes = CredentialAttributes(generateServiceName("Quill", "apiKey"))
 
     @Volatile
-    private var cached: Cached? = null
-
-    private class Cached(val key: String?)
+    private var cached: Optional<String>? = null
 
     suspend fun get(): String? {
-        cached?.let { return it.key }
+        cached?.let { return it.orElse(null) }
         val key = withContext(Dispatchers.IO) { PasswordSafe.instance.getPassword(attributes) }
-        cached = Cached(key)
+        cached = Optional.ofNullable(key)
         return key
     }
 
     fun save(key: String?) {
         val value = key?.takeIf { it.isNotEmpty() }
-        cached = Cached(value)
+        cached = Optional.ofNullable(value)
         scope.launch(Dispatchers.IO) { PasswordSafe.instance.setPassword(attributes, value) }
     }
 

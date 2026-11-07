@@ -1,6 +1,5 @@
 package dev.anay.quill
 
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
@@ -27,7 +26,7 @@ object ContextCollector {
     }
 
     private fun snippet(file: VirtualFile): ContextSnippet? {
-        val document: Document = FileDocumentManager.getInstance().getDocument(file) ?: return null
+        val document = FileDocumentManager.getInstance().getDocument(file) ?: return null
         val head = document.charsSequence.lineSequence().take(MAX_LINES).joinToString("\n").trim()
         return head.takeIf { it.isNotEmpty() }?.let { ContextSnippet(file.name, it) }
     }

@@ -13,7 +13,6 @@ data class EngineConfig(
     val maxTokens: Int,
     val debounceMs: Long,
     val requestTimeoutMs: Long,
-    val latencyBudgetMs: Long,
 )
 
 /** Reports a failure through [sink] once, and stays quiet until a request succeeds again. */
@@ -94,7 +93,7 @@ class CompletionEngine(
     private suspend fun fetch(prompt: FimPrompt, shape: Shape, settings: EngineConfig, debounce: Boolean): String? {
         if (debounce) delay(settings.debounceMs)
         val wanted = if (shape.singleLine) minOf(settings.maxTokens, SINGLE_LINE_TOKENS) else settings.maxTokens
-        val tokens = latency.cap(wanted, settings.latencyBudgetMs)
+        val tokens = latency.cap(wanted, LATENCY_BUDGET_MS)
         val started = System.nanoTime()
         return try {
             val raw = withTimeout(settings.requestTimeoutMs) { backend.complete(CompletionRequest(prompt, tokens, shape.stops)) }
@@ -103,21 +102,24 @@ class CompletionEngine(
             Cleanup.clean(raw, prompt.suffix, shape).ifEmpty { null }
         } catch (e: CancellationException) {
             // withTimeout throws a CancellationException subclass; only a timeout of our own is a failure.
-            if (e is TimeoutCancellationException) fail(settings, "The completion server did not answer in time") else throw e
+            if (e !is TimeoutCancellationException) throw e
+            latency.record(settings.requestTimeoutMs)
+            fail("The completion server did not answer in time")
         } catch (e: BackendException) {
-            fail(settings, e.message ?: "The completion request failed")
+            fail(e.message ?: "The completion request failed")
         } catch (e: RuntimeException) {
-            fail(settings, "Unexpected error: ${e.javaClass.simpleName}")
+            fail("Unexpected error: ${e.javaClass.simpleName}")
         }
     }
 
-    private fun fail(settings: EngineConfig, message: String): String? {
-        latency.record(settings.requestTimeoutMs)
+    private fun fail(message: String): String? {
         reporter.failure(message)
         return null
     }
 
     private companion object {
         const val SINGLE_LINE_TOKENS = 48
+        // ponytail: fixed budget; promote to a setting if users need to tune it.
+        const val LATENCY_BUDGET_MS = 1_500L
     }
 }

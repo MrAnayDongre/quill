@@ -44,6 +44,8 @@ class ProviderTest : BasePlatformTestCase() {
         }
     }
 
+    // The platform creates this event itself in the editor; a test has to build it by hand.
+    @Suppress("DEPRECATION")
     private fun directCall() = InlineCompletionEvent.DirectCall(myFixture.editor, myFixture.editor.caretModel.currentCaret, DataContext.EMPTY_CONTEXT)
 
     private fun suggest(): String? {

@@ -91,7 +91,8 @@ class OpenAiBackend(
         return text.asString
     }
 
-    override fun close() = client.close()
+    /** Drops in-flight requests at once instead of waiting for them. */
+    override fun close() = client.shutdownNow()
 
     private companion object {
         const val MAX_RESPONSE_BYTES = 1 shl 20

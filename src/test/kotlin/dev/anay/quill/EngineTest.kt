@@ -14,7 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 class EngineTest {
     private val backend = FakeBackend()
     private val failures = CopyOnWriteArrayList<String>()
-    private var config = EngineConfig(maxTokens = 100, debounceMs = 0, requestTimeoutMs = 2_000, latencyBudgetMs = 1_500)
+    private var config = EngineConfig(maxTokens = 100, debounceMs = 0, requestTimeoutMs = 2_000)
     private val engine = CompletionEngine(backend, { config }, FailureReporter { failures += it }, cacheSize = 2)
     private val shape = Shape(singleLine = false, stops = emptyList())
 
@@ -109,6 +109,25 @@ class EngineTest {
         engine.complete(prompt("a"), Shape(singleLine = true, stops = emptyList()))
         engine.complete(prompt("b"), shape)
         assertEquals(listOf(48, 100), backend.requests.map { it.maxTokens })
+    }
+
+    @Test
+    fun aFailureDoesNotShrinkTheNextRequest() = runBlocking {
+        backend.failure = BackendException("down")
+        engine.complete(prompt("a"), shape)
+        backend.failure = null
+        engine.complete(prompt("b"), shape)
+        assertEquals(100, backend.requests.last().maxTokens)
+    }
+
+    @Test
+    fun aTimeoutShrinksTheNextRequest() = runBlocking {
+        backend.gate = CompletableDeferred()
+        config = config.copy(requestTimeoutMs = 1_600)
+        engine.complete(prompt("a"), shape)
+        backend.gate = null
+        engine.complete(prompt("b"), shape)
+        assertTrue(backend.requests.last().maxTokens < 100)
     }
 
     @Test
