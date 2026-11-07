@@ -13,6 +13,7 @@ dependencies {
     intellijPlatform {
         intellijIdea("2026.2.3")
         testFramework(TestFrameworkType.Platform)
+        testBundledPlugins("com.intellij.modules.ultimate")
     }
 }
 
