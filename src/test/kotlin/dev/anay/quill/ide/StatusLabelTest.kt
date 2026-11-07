@@ -20,10 +20,10 @@ class StatusLabelTest : BasePlatformTestCase() {
         val stats = CompletionStats()
         listOf(100L, 200L, 300L).forEach(stats::recordFirstText)
         stats.caught(3)
-        stats.autoFixed()
-        stats.repaired()
+        stats.autoFixed(1)
+        stats.repaired(2)
         val tooltip = statusTooltip(stats)
         assertTrue(tooltip, tooltip.contains("Median 200 ms, 95th percentile 300 ms over the last 3 suggestions."))
-        assertTrue(tooltip, tooltip.contains("Kept 3 invented names off the screen: 1 fixed on the spot, 1 repaired by asking again."))
+        assertTrue(tooltip, tooltip.contains("Kept 3 invented names off the screen (1 fixed on the spot, 2 by asking again)."))
     }
 }

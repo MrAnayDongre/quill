@@ -32,16 +32,20 @@ internal class PsiVerifier(
         return Problems(unknown, "$commentPrefix Do not use these names, they do not exist here: ${unknown.joinToString(", ")}\n", fixes)
     }
 
+    // Whether the lines before the caret already hold names the IDE can not resolve. It does not depend on the
+    // candidate, so it is worked out once, and only when a candidate has a suspicious name.
+    private var fileUnfitToJudge: Boolean? = null
+
     private fun unknownNames(candidate: String): List<String> {
         if (!file.isValid || DumbService.isDumb(file.project)) return emptyList()
         val text = StringBuilder(original).insert(caret, candidate)
         val copy = PsiFileFactory.getInstance(file.project).createFileFromText(text, file) ?: return emptyList()
-        val all = unresolved(copy, maxOf(0, caret - BASELINE_CHARS), caret + candidate.length)
-        val added = all.filter { it.end > caret }.map { it.name }.toSet()
-        val before = all.filter { it.end <= caret }.map { it.name }.toSet()
-        // Anything the setup could not resolve before the caret (no SDK, a dynamic language, code being written)
-        // makes the file unfit to judge, because one unknown type makes every member access on it unknown too.
-        return if (before.isNotEmpty()) emptyList() else added.toList()
+        val added = unresolved(copy, caret, caret + candidate.length).filter { it.end > caret }.map { it.name }.distinct()
+        if (added.isEmpty()) return emptyList()
+        // One unknown type (no SDK, a dynamic language, code being written) makes every member access on it unknown
+        // too, so a file with unresolved names before the caret can not be judged.
+        val unfit = fileUnfitToJudge ?: unresolved(copy, maxOf(0, caret - BASELINE_CHARS), caret).any { it.end <= caret }.also { fileUnfitToJudge = it }
+        return if (unfit) emptyList() else added
     }
 
     private class Unknown(val name: String, val end: Int)

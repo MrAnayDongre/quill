@@ -1,10 +1,11 @@
 package dev.anay.quill.completion
 
+import com.intellij.openapi.diagnostic.logger
 import dev.anay.quill.backend.BackendException
 import dev.anay.quill.backend.CompletionBackend
 import dev.anay.quill.backend.CompletionRequest
+import dev.anay.quill.backend.FimPrompt
 import dev.anay.quill.backend.NotConfiguredException
-import com.intellij.openapi.diagnostic.logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
@@ -89,7 +90,8 @@ internal class CompletionEngine(
                     if (problems != null && verifier != null) {
                         val fixed = problems.fixes.takeIf { it.keys.containsAll(problems.names) }?.let { NameRepair.apply(line, it) }
                         if (fixed != null && verifier.problems(whole.toString() + fixed) == null) {
-                            stats.autoFixed()
+                            stats.caught(problems.names.size)
+                            stats.autoFixed(problems.names.size)
                             shown = fixed
                             blocked = null
                         }
@@ -117,12 +119,14 @@ internal class CompletionEngine(
             withTimeout(settings.requestTimeoutMs) {
                 var problems = pass(key.prompt)
                 var repairs = 0
+                var caughtNames = 0
                 while (problems != null) {
                     stats.caught(problems.names.size)
+                    caughtNames = problems.names.size
                     LOG.debug("Candidate used ${problems.names.size} unknown names")
                     if (repairs++ == MAX_REPAIRS) break
                     problems = pass(FimPrompt(problems.hint + key.prompt.prefix + whole, key.prompt.suffix))
-                    if (problems == null) stats.repaired()
+                    if (problems == null) stats.repaired(caughtNames)
                 }
             }
             latency.record((System.nanoTime() - started) / 1_000_000)

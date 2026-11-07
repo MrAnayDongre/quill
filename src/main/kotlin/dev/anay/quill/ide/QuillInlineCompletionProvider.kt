@@ -14,7 +14,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
 import dev.anay.quill.completion.Cleanup
 import dev.anay.quill.completion.ContextSnippet
-import dev.anay.quill.completion.FimPrompt
+import dev.anay.quill.backend.FimPrompt
 import dev.anay.quill.completion.PromptBuilder
 import dev.anay.quill.completion.Shape
 import dev.anay.quill.completion.Verifier
@@ -62,7 +62,7 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
         val windowStart = maxOf(0, caret - windowChars)
         // Symbols first: they are the most specific, and the prompt drops what does not fit from the end.
         val symbols = SymbolContext.collect(request.file, caret, windowStart, excludedPatterns)
-        val recent = RecentEdits.getInstance().snippets(file.name, document.getLineNumber(caret))
+        val recent = RecentEdits.getInstance().snippets(request.file.project, file, document.getLineNumber(caret), excludedPatterns)
         val context = symbols + recent + NeighbourFiles.collect(request.file.project, file, excludedPatterns)
         val prompt = PromptBuilder.build(before, after, context, commentPrefix, WINDOW_TOKENS)
         val shape = Shape(singleLine = after.substringBefore('\n').isNotBlank(), stops = Cleanup.stopsFor(language.id))
@@ -84,7 +84,7 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
         // ponytail: fixed prompt window; promote to a setting for models with small contexts.
         const val WINDOW_TOKENS = 1500
         val IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
-        // ponytail: very large files are not re-parsed per line; raise it if parsing proves cheap enough.
-        const val MAX_VERIFIED_CHARS = 300_000
+        // ponytail: every verified line re-parses the file (about 45 ms at 40,000 characters), so big files skip verification.
+        const val MAX_VERIFIED_CHARS = 100_000
     }
 }

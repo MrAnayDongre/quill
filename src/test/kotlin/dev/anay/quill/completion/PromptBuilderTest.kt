@@ -1,5 +1,6 @@
 package dev.anay.quill.completion
 
+import dev.anay.quill.backend.FimPrompt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

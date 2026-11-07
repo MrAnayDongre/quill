@@ -2,8 +2,6 @@ package dev.anay.quill.backend
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import dev.anay.quill.completion.Cleanup
-import dev.anay.quill.completion.FimPrompt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose

@@ -6,7 +6,10 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
+import com.intellij.openapi.vfs.VirtualFile
 import dev.anay.quill.completion.ContextSnippet
 import dev.anay.quill.settings.Exclusions
 import dev.anay.quill.settings.QuillSettings
@@ -18,7 +21,7 @@ import dev.anay.quill.settings.QuillSettings
  */
 @Service(Service.Level.APP)
 internal class RecentEdits {
-    private class Edit(val file: String, val line: Int, val text: String)
+    private class Edit(val file: VirtualFile, val line: Int, val text: String)
 
     // Line numbers are those at the time of the edit and are not updated when lines move. That is good enough for a hint.
     private val edits = ArrayDeque<Edit>()
@@ -30,16 +33,23 @@ internal class RecentEdits {
         val text = document.getText(TextRange(document.getLineStartOffset(line), document.getLineEndOffset(line))).trim()
         if (text.isEmpty()) return
         synchronized(edits) {
-            edits.removeAll { it.file == file.name && it.line == line }
-            edits.addLast(Edit(file.name, line, text.take(MAX_LINE_CHARS)))
+            edits.removeAll { it.file == file && it.line == line }
+            edits.addLast(Edit(file, line, text.take(MAX_LINE_CHARS)))
             while (edits.size > MAX_EDITS) edits.removeFirst()
         }
     }
 
-    /** The recent edits other than the one in progress, oldest first. */
-    fun snippets(currentFile: String, currentLine: Int): List<ContextSnippet> {
-        val lines = synchronized(edits) { edits.filterNot { it.file == currentFile && it.line == currentLine } }
-        return if (lines.isEmpty()) emptyList() else listOf(ContextSnippet("recent edits", lines.joinToString("\n") { "${it.file}:${it.line + 1}: ${it.text}" }))
+    /**
+     * The recent edits other than the one in progress, oldest first. Only files of [project] qualify, so code from
+     * another window or from outside any project never reaches this project's requests, and the exclusion patterns
+     * are applied as they are now, not as they were when the edit was made.
+     */
+    fun snippets(project: Project, currentFile: VirtualFile, currentLine: Int, excludedPatterns: String): List<ContextSnippet> {
+        val index = ProjectFileIndex.getInstance(project)
+        val lines = synchronized(edits) { edits.toList() }
+            .filterNot { it.file == currentFile && it.line == currentLine }
+            .filter { it.file.isValid && index.isInContent(it.file) && !Exclusions.isExcluded(it.file.name, excludedPatterns) }
+        return if (lines.isEmpty()) emptyList() else listOf(ContextSnippet("recent edits", lines.joinToString("\n") { "${it.file.name}:${it.line + 1}: ${it.text}" }))
     }
 
     companion object {

@@ -1,8 +1,6 @@
 package dev.anay.quill.completion
 
-/** Text that is sent to the model: everything before the caret (with context on top) and everything after it. */
-internal data class FimPrompt(val prefix: String, val suffix: String)
-
+import dev.anay.quill.backend.FimPrompt
 /** A few lines taken from another file of the project. */
 internal data class ContextSnippet(val path: String, val text: String)
 

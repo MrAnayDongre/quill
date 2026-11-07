@@ -55,15 +55,15 @@ Measured on the same 11 cross-file completions (8-file Java project, `deepseek-v
 | With project context | 11 of 11 | 2 of 11 | 254 ms |
 | With project context and verification | 9 of 11 | 0 of 11 | 289 ms |
 
-Verification found 5 invented names in this run, repaired 1 suggestion by asking again, and withheld 2. A repair costs one more request, which is why the 95th percentile is about 1.2 seconds. The on-the-spot fix is covered by tests but did not trigger in this run, so its effect on the numbers is not measured. Verified lines appear a line at a time instead of character by character; turn verification off in the settings to get character streaming back. The status bar tooltip counts the names kept off the screen.
+Verification found 5 invented names in this run, repaired 1 suggestion by asking again, and withheld 2. A repair costs one more request, which is why the 95th percentile is about 1.2 seconds. The on-the-spot fix is covered by tests but did not trigger in this run, so its effect on the numbers is not measured. Checking costs about 25 ms per line on a 2,000-line Java file (measured warm; the first lines of a session take 60 to 300 ms), and files over 100,000 characters are not checked. Checking costs about 25 ms per line on a 2,000-line Java file (measured warm; the first lines of a session take 60 to 300 ms), and files over 100,000 characters are not checked. Verified lines appear a line at a time instead of character by character; turn verification off in the settings to get character streaming back. The status bar tooltip counts the names kept off the screen.
 
 The check is by name, so it catches invented members and functions, not wrong argument types. It is skipped for a file when the lines just before the caret already contain names the IDE cannot resolve (no SDK configured, a dynamic language, code you are in the middle of writing), because one unknown type makes everything used on it unknown too. It is tested on Java only.
 
 ## What informed the design, and what was tried
 
 - **Recent edits as context** follows the edit prediction work in [Zed's Zeta](https://zed.dev/blog/edit-prediction) and [Sweep's next-edit model](https://blog.sweep.dev/posts/oss-next-edit), which feed the model what you just changed. Quill uses the idea for plain completion; it does not predict edits elsewhere in the file. I did not measure its effect, only that it reaches the prompt.
-- **Checking against the code** follows the 2026 work on static analysis for model hallucinations, which finds that analysers catch a large but partial share of invented names ([overview](https://arxiv.org/pdf/2511.00776)), and the argument for deterministic repair over asking the model again ([FORGE 2026](https://arxiv.org/html/2601.19106v1)). That is why a clear name match is fixed locally before the model is asked again.
-- **Structural context from the IDE's index** follows the repository-level completion work that combines lexical and structural evidence ([ACAR](https://aclanthology.org/2026.emnlp-main.81.pdf)). Quill uses structure only; it has no lexical or embedding retrieval, and the benchmark above is far too small to compare with those papers.
+- **Checking against the code** follows the argument for deterministic repair of invented names over asking the model again ([FORGE 2026](https://arxiv.org/html/2601.19106v1), whose results come from its authors' own tool and a 200 snippet set they built). That is why a clear name match is fixed locally before the model is asked again.
+- **Structural context from the IDE's index** is my own design, not taken from a paper; the benchmark above is far too small to compare it with retrieval based approaches.
 - **Tried and dropped: prompt cache layout.** Putting volatile context after the cursor raised the provider's cached share of the prompt from about 0.1 to 0.86 in a typing simulation, but a warmed-up control reached the same share and the median latency did not change (about 450 ms in every layout), so the layout was left alone.
 
 ## How a suggestion is made
@@ -88,7 +88,7 @@ The check is by name, so it catches invented members and functions, not wrong ar
 ## Privacy and safety
 
 - Files matching the excluded patterns, and always `.env` files, are never the edited file or context.
-- Only the text around the caret, plus a few lines from up to three other project files, leaves the IDE.
+- Only the text around the caret, plus a few lines from up to three other project files, the declarations and members described above, and your last few edited lines in files of this project, leave the IDE. Edits made in another window, or in files outside the project, are never sent.
 - The key is sent only over https or to a local server. Redirects are not followed. The warm-up request carries no key.
 - A failing server produces one notification, then silence until a request succeeds again. Notifications and logs carry a status code, never request or response bodies.
 

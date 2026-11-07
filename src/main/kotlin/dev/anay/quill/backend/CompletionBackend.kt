@@ -1,7 +1,9 @@
 package dev.anay.quill.backend
 
-import dev.anay.quill.completion.FimPrompt
 import kotlinx.coroutines.flow.Flow
+
+/** Text that is sent to the model: everything before the caret (with context on top) and everything after it. */
+internal data class FimPrompt(val prefix: String, val suffix: String)
 
 internal data class CompletionRequest(val prompt: FimPrompt, val maxTokens: Int, val stop: List<String>)
 

@@ -18,7 +18,7 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <inline.completion.provider implementation="dev.anay.quill.ide.QuillInlineCompletionProvider"/>
-        <applicationConfigurable parentId="tools" instance="dev.anay.quill.settings.QuillConfigurable"
+        <applicationConfigurable parentId="tools" instance="dev.anay.quill.ide.QuillConfigurable"
                                  id="dev.anay.quill.settings" displayName="Quill"/>
         <statusBarWidgetFactory id="dev.anay.quill.status" implementation="dev.anay.quill.ide.QuillStatusBarFactory"/>
         <editorFactoryDocumentListener implementation="dev.anay.quill.context.RecentEditsListener"/>

@@ -34,9 +34,10 @@ internal class CompletionStats(private val window: Int = 50, private val onChang
         onChange()
     }
 
+    /** Invented names that the model replaced with real ones when asked again. */
     @Synchronized
-    fun repaired() {
-        repairs++
+    fun repaired(names: Int) {
+        repairs += names
         onChange()
     }
 
@@ -44,10 +45,10 @@ internal class CompletionStats(private val window: Int = 50, private val onChang
     var autoFixes = 0
         private set
 
-    /** An invented name that was replaced with the real one it most likely meant, without asking the model again. */
+    /** Invented names that were replaced with the real ones they most likely meant, without asking the model again. */
     @Synchronized
-    fun autoFixed() {
-        autoFixes++
+    fun autoFixed(names: Int) {
+        autoFixes += names
         onChange()
     }
 

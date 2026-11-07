@@ -1,4 +1,4 @@
-package dev.anay.quill.settings
+package dev.anay.quill.ide
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
@@ -16,7 +16,8 @@ import com.intellij.ui.dsl.builder.panel
 import dev.anay.quill.QuillBundle
 import dev.anay.quill.backend.ProbeResult
 import dev.anay.quill.backend.EndpointPolicy
-import dev.anay.quill.ide.QuillService
+import dev.anay.quill.settings.ApiKeyStore
+import dev.anay.quill.settings.QuillSettings
 import javax.swing.JPasswordField
 
 /** One click setup for the common servers. Choosing "Custom" leaves the fields as they are. */

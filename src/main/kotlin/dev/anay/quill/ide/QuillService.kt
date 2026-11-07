@@ -23,7 +23,6 @@ import dev.anay.quill.completion.CompletionStats
 import dev.anay.quill.completion.EngineConfig
 import dev.anay.quill.completion.FailureReporter
 import dev.anay.quill.settings.ApiKeyStore
-import dev.anay.quill.settings.QuillConfigurable
 import dev.anay.quill.settings.QuillSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -73,7 +72,7 @@ class QuillService(private val scope: CoroutineScope) : Disposable {
         return EngineConfig(state.maxTokens, state.debounceMs.toLong(), REQUEST_TIMEOUT_MS)
     }
 
-    fun refreshStatusBar() = ApplicationManager.getApplication().invokeLater {
+    internal fun refreshStatusBar() = ApplicationManager.getApplication().invokeLater {
         for (project in ProjectManager.getInstance().openProjects) {
             WindowManager.getInstance().getStatusBar(project)?.updateWidget(QuillStatusBarFactory.ID)
         }

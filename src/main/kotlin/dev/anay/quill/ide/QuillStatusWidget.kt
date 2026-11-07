@@ -4,7 +4,6 @@ import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.util.Consumer
-import dev.anay.quill.settings.QuillConfigurable
 import dev.anay.quill.settings.QuillSettings
 import java.awt.Component
 import java.awt.event.MouseEvent

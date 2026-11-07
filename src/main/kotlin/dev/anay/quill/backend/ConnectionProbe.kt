@@ -1,6 +1,5 @@
 package dev.anay.quill.backend
 
-import dev.anay.quill.completion.FimPrompt
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withTimeout

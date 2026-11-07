@@ -4,7 +4,7 @@ import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
-import dev.anay.quill.completion.FimPrompt
+import dev.anay.quill.backend.FimPrompt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking

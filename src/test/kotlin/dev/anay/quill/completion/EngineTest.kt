@@ -3,6 +3,7 @@ package dev.anay.quill.completion
 import dev.anay.quill.backend.BackendException
 import dev.anay.quill.backend.CompletionRequest
 import dev.anay.quill.backend.FakeBackend
+import dev.anay.quill.backend.FimPrompt
 import dev.anay.quill.backend.NotConfiguredException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -97,7 +98,7 @@ class EngineTest {
         assertEquals("ok\ngood(1)\nrest\n", out)
         assertEquals(1, backend.requests.size)
         assertEquals(1, stats.autoFixes)
-        assertEquals(0, stats.namesCaught)
+        assertEquals(1, stats.namesCaught)
     }
 
     @Test
