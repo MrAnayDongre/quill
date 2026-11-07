@@ -71,6 +71,8 @@ internal class CompletionEngine(
 
         // One pass over the model's answer. With a verifier, a line is shown only once it checks out; the first
         // line that does not stops the pass and its problems come back so the caller can ask again.
+        var failedLine = ""
+
         suspend fun pass(prompt: FimPrompt): Problems? {
             val cleaner = StreamCleaner(prompt.suffix, key.shape)
             val pending = StringBuilder()
@@ -87,7 +89,7 @@ internal class CompletionEngine(
                     var shown = line
                     val problems = verifier?.problems(whole.toString() + line)
                     var blocked = problems
-                    if (problems != null && verifier != null) {
+                    if (problems != null) {
                         val fixed = problems.fixes.takeIf { it.keys.containsAll(problems.names) }?.let { NameRepair.apply(line, it) }
                         if (fixed != null && verifier.problems(whole.toString() + fixed) == null) {
                             stats.caught(problems.names.size)
@@ -97,6 +99,7 @@ internal class CompletionEngine(
                         }
                     }
                     failure = blocked
+                    if (blocked != null) failedLine = line
                     if (failure == null) { pending.delete(0, line.length); show(shown) }
                 }
             }
@@ -125,9 +128,11 @@ internal class CompletionEngine(
                     caughtNames = problems.names.size
                     LOG.debug("Candidate used ${problems.names.size} unknown names")
                     if (repairs++ == MAX_REPAIRS) break
-                    problems = pass(FimPrompt(problems.hint + key.prompt.prefix + whole, key.prompt.suffix))
+                    problems = pass(FimPrompt(withHint(key.prompt.prefix + whole, problems.hint), key.prompt.suffix))
                     if (problems == null) stats.repaired(caughtNames)
                 }
+                // Nothing better was found: show the part of the line that is still sound, such as a call up to its bad argument.
+                problems?.let { sound(it, whole, failedLine) }?.let { show(it) }
             }
             latency.record((System.nanoTime() - started) / 1_000_000)
             if (firstMs >= 0) stats.recordFirstText(firstMs) else stats.markOk()
@@ -160,6 +165,18 @@ internal class CompletionEngine(
         private const val LATENCY_BUDGET_MS = 1_500L
         private const val FAST_DEBOUNCE_MS = 20L
         private const val TRIGGERS = ".(,{[=:>\n"
+
+        /** The sound start of [failedLine], given that [problems] was found for `shown + failedLine`. */
+        internal fun sound(problems: Problems, shown: CharSequence, failedLine: String): String? {
+            val keep = problems.validPrefixLength - shown.length
+            return if (keep > 0 && keep <= failedLine.length) failedLine.substring(0, keep).takeIf { it.isNotBlank() } else null
+        }
+
+        /** Puts [hint] on its own line directly above the line being completed, where a model pays most attention. */
+        internal fun withHint(prefix: String, hint: String): String {
+            val lineStart = prefix.lastIndexOf('\n') + 1
+            return prefix.substring(0, lineStart) + hint + prefix.substring(lineStart)
+        }
 
         /** Right after a structural character the next word is the interesting one, so there is no point waiting. */
         internal fun debounceFor(prefix: String, baseMs: Long): Long =

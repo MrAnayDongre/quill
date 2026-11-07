@@ -65,14 +65,14 @@ class EngineTest {
         val out = engine.stream(prompt("p"), shape, verifier = rejectsBad).toList().joinToString("")
         assertEquals("ok\nfixed\nmore\n", out)
         assertEquals(2, backend.requests.size)
-        assertEquals("// Do not use these names: bad\npok\n", backend.requests[1].prompt.prefix)
+        assertEquals("pok\n// Do not use these names: bad\n", backend.requests[1].prompt.prefix)
         assertEquals(1, stats.namesCaught)
         assertEquals(1, stats.repairs)
     }
 
     @Test
     fun aRepairThatFailsAgainStopsWithoutAThirdRequest() = runBlocking {
-        backend.answer = { if (it.prompt.prefix.endsWith("ok\n")) "bad\nrest\n" else "ok\nbad\nrest\n" }
+        backend.answer = { if (it.prompt.prefix.contains("ok\n")) "bad\nrest\n" else "ok\nbad\nrest\n" }
         val out = engine.stream(prompt("p"), shape, verifier = rejectsBad).toList().joinToString("")
         assertEquals("ok\n", out)
         assertEquals(2, backend.requests.size)
@@ -110,6 +110,18 @@ class EngineTest {
         assertEquals("fine\n", engine.stream(prompt("p"), shape, verifier = stillBad).toList().joinToString(""))
         assertEquals(2, backend.requests.size)
         assertEquals(0, stats.autoFixes)
+    }
+
+    @Test
+    fun whenNothingBetterIsFoundTheSoundStartOfTheLineIsShown() = runBlocking {
+        val partlyBad = Verifier { candidate ->
+            val bad = candidate.indexOf("bad")
+            if (bad >= 0) Problems(listOf("bad"), "// Do not use these names: bad\n", validPrefixLength = bad) else null
+        }
+        backend.answer = { if (it.prompt.prefix.contains("ok\n")) "call(arg, bad(1))\nrest\n" else "ok\ncall(arg, bad(1))\nrest\n" }
+        val out = engine.stream(prompt("p"), shape, verifier = partlyBad).toList().joinToString("")
+        assertEquals("ok\ncall(arg, ", out)
+        assertEquals(2, backend.requests.size)
     }
 
     @Test
@@ -192,6 +204,12 @@ class EngineTest {
         val started = System.nanoTime()
         engine.text(prompt("a"), shape, debounce = false)
         assertTrue((System.nanoTime() - started) / 1_000_000 < 1_000)
+    }
+
+    @Test
+    fun theHintGoesAboveTheLineBeingCompleted() {
+        assertEquals("a\n// hint\nb = c.", CompletionEngine.withHint("a\nb = c.", "// hint\n"))
+        assertEquals("// hint\nb = c.", CompletionEngine.withHint("b = c.", "// hint\n"))
     }
 
     @Test

@@ -14,7 +14,7 @@ dependencies {
     intellijPlatform {
         intellijIdea("2026.2.3")
         testFramework(TestFrameworkType.Platform)
-        testBundledPlugins("com.intellij.modules.ultimate", "com.intellij.java")
+        testBundledPlugins("com.intellij.modules.ultimate", "com.intellij.java", "org.jetbrains.kotlin", "JavaScript")
     }
 }
 

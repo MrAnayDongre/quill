@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * Deterministic backend: records requests, answers in chunks of [chunkSize] characters, can hold an answer back
  * behind [gate], and can fail on demand.
  */
-class FakeBackend(var chunkSize: Int = Int.MAX_VALUE, var answer: (CompletionRequest) -> String = { "fake" }) : CompletionBackend {
+internal class FakeBackend(var chunkSize: Int = Int.MAX_VALUE, var answer: (CompletionRequest) -> String = { "fake" }) : CompletionBackend {
     val requests = CopyOnWriteArrayList<CompletionRequest>()
     val cancelled = AtomicInteger()
     val delivered = AtomicInteger()

@@ -34,6 +34,12 @@ class PsiVerifierTest : BasePlatformTestCase() {
         assertEquals(mapOf("greetPersonNow" to "greetPerson"), found.fixes)
     }
 
+    fun testTheSoundStartOfALineIsReported() {
+        val candidate = "int n = greeter.shout(\"x\");\n"
+        val found = problems(verifier(source), candidate)!!
+        assertEquals("int n = ", candidate.substring(0, found.validPrefixLength))
+    }
+
     fun testNamesTheCandidateDeclaresItselfPass() {
         assertNull(problems(verifier(source), "int count = 3;\n        count = count + 1;\n"))
     }

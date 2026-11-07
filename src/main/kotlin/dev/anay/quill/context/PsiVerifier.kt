@@ -26,21 +26,23 @@ internal class PsiVerifier(
 ) : Verifier {
 
     override suspend fun problems(candidate: String): Problems? {
-        val unknown = readAction { unknownNames(candidate) }
-        if (unknown.isEmpty()) return null
+        val found = readAction { unknownNames(candidate) }
+        if (found.isEmpty()) return null
+        val unknown = found.map { it.name }.distinct()
         val fixes = unknown.mapNotNull { name -> NameRepair.nearest(name, knownNames)?.let { name to it } }.toMap()
-        return Problems(unknown, "$commentPrefix Do not use these names, they do not exist here: ${unknown.joinToString(", ")}\n", fixes)
+        val sound = found.minOf { it.start }.coerceAtLeast(0)
+        return Problems(unknown, "$commentPrefix Do not use these names, they do not exist here: ${unknown.joinToString(", ")}\n", fixes, sound)
     }
 
     // Whether the lines before the caret already hold names the IDE can not resolve. It does not depend on the
     // candidate, so it is worked out once, and only when a candidate has a suspicious name.
     private var fileUnfitToJudge: Boolean? = null
 
-    private fun unknownNames(candidate: String): List<String> {
+    private fun unknownNames(candidate: String): List<Unknown> {
         if (!file.isValid || DumbService.isDumb(file.project)) return emptyList()
         val text = StringBuilder(original).insert(caret, candidate)
         val copy = PsiFileFactory.getInstance(file.project).createFileFromText(text, file) ?: return emptyList()
-        val added = unresolved(copy, caret, caret + candidate.length).filter { it.end > caret }.map { it.name }.distinct()
+        val added = unresolved(copy, caret, caret + candidate.length).filter { it.end > caret }
         if (added.isEmpty()) return emptyList()
         // One unknown type (no SDK, a dynamic language, code being written) makes every member access on it unknown
         // too, so a file with unresolved names before the caret can not be judged.
@@ -48,7 +50,8 @@ internal class PsiVerifier(
         return if (unfit) emptyList() else added
     }
 
-    private class Unknown(val name: String, val end: Int)
+    /** An unresolved reference: its name, where it ends, and where it starts in the candidate (at its qualifier, if it has one). */
+    private class Unknown(val name: String, val end: Int, val start: Int)
 
     private fun unresolved(file: PsiFile, from: Int, to: Int): List<Unknown> {
         val found = ArrayList<Unknown>()
@@ -61,7 +64,7 @@ internal class PsiVerifier(
                 for (ref in parent.references) {
                     if (ref.isSoft || !isUnresolved(ref)) continue
                     val name = ref.rangeInElement.substring(ref.element.text)
-                    if (name.isNotBlank()) found += Unknown(name, ref.element.textRange.startOffset + ref.rangeInElement.endOffset)
+                    if (name.isNotBlank()) found += Unknown(name, ref.element.textRange.startOffset + ref.rangeInElement.endOffset, ref.element.textRange.startOffset - caret)
                 }
             }
             leaf = PsiTreeUtil.nextLeaf(leaf)
