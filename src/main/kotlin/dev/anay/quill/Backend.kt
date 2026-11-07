@@ -22,6 +22,8 @@ interface CompletionBackend {
 }
 
 data class Endpoint(val url: String, val model: String, val apiKey: String?, val timeout: Duration) {
+    val isChat: Boolean get() = URI(url).path.orEmpty().trimEnd('/').endsWith("/chat/completions")
+
     init {
         EndpointPolicy.validate(url)?.let { throw BackendException(it) }
         if (!apiKey.isNullOrEmpty() && !EndpointPolicy.isLoopback(URI(url).host) && URI(url).scheme != "https") {
@@ -43,7 +45,10 @@ object EndpointPolicy {
         host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
 }
 
-/** Talks to any server that implements the OpenAI completions API, including its `suffix` field for fill in the middle. */
+/**
+ * Talks to any server that implements the OpenAI API. An endpoint ending in `/chat/completions` gets a chat request
+ * with a cursor marker; any other endpoint gets a completions request with the `suffix` field for fill in the middle.
+ */
 class OpenAiBackend(
     private val endpoint: suspend () -> Endpoint,
     private val client: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
@@ -68,14 +73,18 @@ class OpenAiBackend(
             if (response.statusCode() !in 200..299) throw BackendException("The server answered HTTP ${response.statusCode()}")
             val bytes = stream.readNBytes(MAX_RESPONSE_BYTES + 1)
             if (bytes.size > MAX_RESPONSE_BYTES) throw BackendException("The server response is too large")
-            return parse(bytes.toString(Charsets.UTF_8))
+            return parse(bytes.toString(Charsets.UTF_8), target.isChat)
         }
     }
 
     private fun body(target: Endpoint, request: CompletionRequest): String = JsonObject().apply {
         addProperty("model", target.model)
-        addProperty("prompt", request.prompt.prefix)
-        addProperty("suffix", request.prompt.suffix)
+        if (target.isChat) {
+            add("messages", chatMessages(request.prompt))
+        } else {
+            addProperty("prompt", request.prompt.prefix)
+            addProperty("suffix", request.prompt.suffix)
+        }
         addProperty("max_tokens", request.maxTokens)
         addProperty("temperature", 0.0)
         addProperty("stream", false)
@@ -83,9 +92,15 @@ class OpenAiBackend(
         add("stop", JsonArray().also { array -> request.stop.take(MAX_STOPS).forEach(array::add) })
     }.toString()
 
-    private fun parse(json: String): String {
+    private fun chatMessages(prompt: FimPrompt) = JsonArray().apply {
+        add(JsonObject().apply { addProperty("role", "system"); addProperty("content", CHAT_INSTRUCTION) })
+        add(JsonObject().apply { addProperty("role", "user"); addProperty("content", prompt.prefix + CURSOR + prompt.suffix) })
+    }
+
+    private fun parse(json: String, chat: Boolean): String {
         val text = runCatching {
-            JsonParser.parseString(json).asJsonObject.getAsJsonArray("choices").get(0).asJsonObject.get("text")
+            val choice = JsonParser.parseString(json).asJsonObject.getAsJsonArray("choices").get(0).asJsonObject
+            if (chat) choice.getAsJsonObject("message").get("content") else choice.get("text")
         }.getOrNull()
         if (text == null || !text.isJsonPrimitive) throw BackendException("The server response has no completion text")
         return text.asString
@@ -95,6 +110,10 @@ class OpenAiBackend(
     override fun close() = client.shutdownNow()
 
     private companion object {
+        const val CURSOR = "<CURSOR>"
+        const val CHAT_INSTRUCTION = "You are a code completion engine. The user message holds a file with a $CURSOR marker. " +
+            "Reply with only the exact text to insert at the marker: no explanation, no code fences, " +
+            "and do not repeat the text around the marker."
         const val MAX_RESPONSE_BYTES = 1 shl 20
         const val MAX_STOPS = 4
     }

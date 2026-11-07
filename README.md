@@ -1,6 +1,6 @@
 # Quill
 
-Inline code completion for JetBrains IDEs. Quill shows suggestions as ghost text while you type and talks to any server that implements the OpenAI completions API: llama.cpp, Ollama and vLLM. The model must support fill in the middle through the `suffix` field.
+Inline code completion for JetBrains IDEs. Quill shows suggestions as ghost text while you type and talks to any server that implements the OpenAI completions API: llama.cpp, Ollama and vLLM. Two request styles are supported, chosen by the endpoint URL: `.../v1/completions` uses the `suffix` field for fill in the middle (the model must support it), and `.../v1/chat/completions` sends the code around a cursor marker as a chat message, which works with chat only models and hosted providers such as CoralBricks (`https://inference.coralbricks.ai/v1/chat/completions`).
 
 Press `Tab` to accept the whole suggestion. The platform also ships actions to accept the next word or the next line; bind them under Settings | Keymap by searching for "inline completion".
 
@@ -16,7 +16,7 @@ This starts a sandbox IntelliJ IDEA with Quill installed. Start a model server f
 
 | Setting | Meaning |
 | --- | --- |
-| Endpoint | Full URL of the completions endpoint, for example `http://localhost:11434/v1/completions` |
+| Endpoint | Full URL of a completions or chat completions endpoint, for example `http://localhost:11434/v1/completions` |
 | Model | Model name sent with each request |
 | API key | Stored in the IDE password safe, never in settings files or logs |
 | Max tokens | Upper bound for one suggestion |

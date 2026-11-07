@@ -32,7 +32,7 @@ class OpenAiBackendTest {
     @Before
     fun start() {
         server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
-        server.createContext("/v1/completions") { exchange ->
+        server.createContext("/v1") { exchange ->
             body.set(exchange.requestBody.readAllBytes().toString(Charsets.UTF_8))
             auth.set(exchange.requestHeaders.getFirst("Authorization"))
             handler(exchange)
@@ -53,8 +53,8 @@ class OpenAiBackendTest {
         exchange.responseBody.write(bytes)
     }
 
-    private fun backend(key: String? = null, timeoutMs: Long = 5_000) = OpenAiBackend({
-        Endpoint("http://localhost:${server.address.port}/v1/completions", "m", key, Duration.ofMillis(timeoutMs))
+    private fun backend(key: String? = null, timeoutMs: Long = 5_000, path: String = "completions") = OpenAiBackend({
+        Endpoint("http://localhost:${server.address.port}/v1/$path", "m", key, Duration.ofMillis(timeoutMs))
     })
 
     private val request = CompletionRequest(FimPrompt("before", "after"), 64, listOf("\n\n\n", "a", "b", "c", "d"))
@@ -69,6 +69,18 @@ class OpenAiBackendTest {
         assertEquals(64, json["max_tokens"].asInt)
         assertEquals(4, json["stop"].asJsonArray.size())
         assertNull(auth.get())
+    }
+
+    @Test
+    fun chatEndpointGetsAMessageWithACursorMarker() = runBlocking {
+        handler = { reply(it, 200, """{"choices":[{"message":{"role":"assistant","content":"a + b"}}]}""") }
+        assertEquals("a + b", backend(path = "chat/completions").use { it.complete(request) })
+        val json = JsonParser.parseString(body.get()).asJsonObject
+        assertFalse(json.has("prompt"))
+        assertFalse(json.has("suffix"))
+        val messages = json["messages"].asJsonArray
+        assertEquals("before<CURSOR>after", messages[1].asJsonObject["content"].asString)
+        assertEquals("system", messages[0].asJsonObject["role"].asString)
     }
 
     @Test
