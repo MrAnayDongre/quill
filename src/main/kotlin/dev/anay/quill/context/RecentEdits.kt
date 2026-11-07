@@ -3,6 +3,7 @@ package dev.anay.quill.context
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -27,6 +28,8 @@ internal class RecentEdits {
     private val edits = ArrayDeque<Edit>()
 
     fun record(document: Document, offset: Int) {
+        // Only what the user types in an editor counts; files the IDE or a tool rewrites in the background do not.
+        if (EditorFactory.getInstance().getEditors(document).isEmpty()) return
         val file = FileDocumentManager.getInstance().getFile(document) ?: return
         if (file.fileType.isBinary || Exclusions.isExcluded(file.name, QuillSettings.getInstance().state.excludedPatterns)) return
         val line = document.getLineNumber(offset.coerceIn(0, document.textLength))

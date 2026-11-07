@@ -1,6 +1,7 @@
 package dev.anay.quill.context
 
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.LightVirtualFile
@@ -9,6 +10,16 @@ import dev.anay.quill.settings.QuillSettings
 
 class RecentEditsTest : BasePlatformTestCase() {
     private fun edit(file: VirtualFile, insert: String) {
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+        val editor = EditorFactory.getInstance().createEditor(document, project)
+        try {
+            WriteCommandAction.runWriteCommandAction(project) { document.insertString(0, insert) }
+        } finally {
+            EditorFactory.getInstance().releaseEditor(editor)
+        }
+    }
+
+    private fun editWithoutAnEditor(file: VirtualFile, insert: String) {
         val document = FileDocumentManager.getInstance().getDocument(file)!!
         WriteCommandAction.runWriteCommandAction(project) { document.insertString(0, insert) }
     }
@@ -48,6 +59,12 @@ class RecentEditsTest : BasePlatformTestCase() {
         val outside = LightVirtualFile("Outside.java", "class Outside {}\n")
         edit(outside, "int leaked = 42;\n")
         assertFalse(snippet(somewhereElse()).contains("leaked"))
+    }
+
+    fun testChangesMadeWithoutAnEditorAreNotRemembered() {
+        val file = myFixture.addFileToProject("Generated.java", "class Generated {}\n").virtualFile
+        editWithoutAnEditor(file, "int generated = 1;\n")
+        assertFalse(snippet(somewhereElse()).contains("Generated.java"))
     }
 
     fun testRepeatedEditsOfOneLineAreKeptOnce() {

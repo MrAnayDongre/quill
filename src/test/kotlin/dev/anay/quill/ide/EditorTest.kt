@@ -3,6 +3,7 @@ package dev.anay.quill.ide
 import com.intellij.codeInsight.inline.completion.InlineCompletion
 import com.intellij.codeInsight.inline.completion.session.InlineCompletionContext
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
@@ -95,7 +96,9 @@ class EditorTest : BasePlatformTestCase() {
 
     fun testARecentEditInAnotherFileIsSentAsContext() {
         val notes = myFixture.addFileToProject("Notes.java", "class Notes {}\n")
+        val notesEditor = EditorFactory.getInstance().createEditor(myFixture.getDocument(notes), project)
         WriteCommandAction.runWriteCommandAction(project) { myFixture.getDocument(notes).insertString(0, "// greetings are polite\n") }
+        EditorFactory.getInstance().releaseEditor(notesEditor)
         firstAnswer = listOf("reet(\\\"x\\\", 1)")
         repairedAnswer = firstAnswer
         myFixture.addFileToProject("Greeter.java", "public class Greeter {\n    public String greet(String name, int times) { return name; }\n}\n")
