@@ -9,10 +9,10 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <inline.completion.provider implementation="dev.anay.quill.QuillInlineCompletionProvider"/>
-        <applicationConfigurable parentId="tools" instance="dev.anay.quill.QuillConfigurable"
+        <inline.completion.provider implementation="dev.anay.quill.ide.QuillInlineCompletionProvider"/>
+        <applicationConfigurable parentId="tools" instance="dev.anay.quill.settings.QuillConfigurable"
                                  id="dev.anay.quill.settings" displayName="Quill"/>
-        <statusBarWidgetFactory id="dev.anay.quill.status" implementation="dev.anay.quill.QuillStatusBarFactory"/>
+        <statusBarWidgetFactory id="dev.anay.quill.status" implementation="dev.anay.quill.ide.QuillStatusBarFactory"/>
         <notificationGroup id="Quill" displayType="BALLOON"/>
     </extensions>
 </idea-plugin>
