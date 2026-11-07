@@ -17,6 +17,7 @@ class QuillSettings : PersistentStateComponent<QuillSettings.State> {
 
     class State {
         var enabled: Boolean = true
+        var verify: Boolean = true
         var endpoint: String = "http://localhost:11434/v1/completions"
         var model: String = "qwen2.5-coder:1.5b-base"
         var maxTokens: Int = 128

@@ -33,7 +33,8 @@ private class QuillStatusWidget(private val project: Project) : StatusBarWidget,
     override fun getTooltipText(): String {
         val stats = QuillService.getInstance().stats
         val speed = stats.median()?.let { "Median ${it} ms, 95th percentile ${stats.p95()} ms over the last ${stats.count()} suggestions. " } ?: ""
-        return "${speed}Click to open Quill settings"
+        val checked = if (stats.namesCaught > 0) "Kept ${stats.namesCaught} invented names off the screen, ${stats.repairs} suggestions repaired. " else ""
+        return "$speed${checked}Click to open Quill settings"
     }
 
     override fun getClickConsumer(): Consumer<MouseEvent> = Consumer {

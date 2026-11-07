@@ -18,15 +18,19 @@ import java.util.concurrent.CopyOnWriteArrayList
 class EditorTest : BasePlatformTestCase() {
     private lateinit var server: HttpServer
     private var scope: CoroutineScope? = null
+    private var firstAnswer = listOf("reeter.", "invented(1)")
+    private var repairedAnswer = listOf("reeter.", "greet(\\\"x\\\", 1)")
     private val bodies = CopyOnWriteArrayList<String>()
 
     override fun setUp() {
         super.setUp()
         server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
         server.createContext("/v1") { exchange ->
-            bodies += exchange.requestBody.readAllBytes().toString(Charsets.UTF_8)
+            val request = exchange.requestBody.readAllBytes().toString(Charsets.UTF_8)
+            bodies += request
             exchange.sendResponseHeaders(200, 0)
-            listOf("greeter.", "greet(\\\"x\\\", 1)").forEach {
+            val answer = if (request.contains("Do not use these names")) repairedAnswer else firstAnswer
+            answer.forEach {
                 exchange.responseBody.write("data: {\"choices\":[{\"text\":\"$it\"}]}\n\n".toByteArray())
                 exchange.responseBody.flush()
             }
@@ -61,7 +65,10 @@ class EditorTest : BasePlatformTestCase() {
         }
         myFixture.type("g")
         PlatformTestUtil.waitWithEventsDispatching("no ghost text appeared", { !ghostText().isNullOrEmpty() }, 10)
-        assertEquals("greeter.greet(\"x\", 1)", ghostText())
+        assertEquals("reeter.greet(\"x\", 1)", ghostText())
+        assertEquals("the invented name should cost exactly one retry", 2, bodies.size)
+        assertTrue(bodies.last(), bodies.last().contains("Do not use these names"))
+        assertTrue(bodies.last(), bodies.last().contains("invented"))
         val request = bodies.last()
         assertTrue(request, request.contains("public String greet(String name, int times)"))
         assertTrue(request, request.contains("void run()"))
@@ -70,6 +77,8 @@ class EditorTest : BasePlatformTestCase() {
 
     fun testMemberAccessSendsTheMembersOfTheReceiversType() {
         myFixture.addFileToProject("Greeter.java", "public class Greeter {\n    public String greet(String name, int times) { return name; }\n    private int secret() { return 1; }\n}\n")
+        firstAnswer = listOf("reet(\\\"x\\\", 1)")
+        repairedAnswer = firstAnswer
         myFixture.configureByText("Main.java", "class Main {\n    void run(Greeter greeter) {\n        greeter.<caret>\n    }\n}\n")
         if (InlineCompletion.getHandlerOrNull(myFixture.editor) == null) {
             InlineCompletion.install(myFixture.editor as EditorEx, CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scope = it })

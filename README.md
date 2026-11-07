@@ -38,6 +38,26 @@ This uses the reference and name APIs that every language plugin implements, so 
 
 Measured on a small made-up Java project of 8 files, with 11 cross-file completions such as `pricing.applyDiscount(order`, `base.times(` and `order.getCustomer().getLoyaltyTier()`: **11 of 11** began with the right call with project context against **5 of 11** with the same prompt window and no context (`deepseek-v4.1-flash-fast`, 2026-11-07). The score only checks that the suggestion starts with the expected call, and 11 cases is a smoke test, not a benchmark. Median time to the whole suggestion was 324 ms with context against 246 ms without, so the extra context costs roughly 80 ms. Comparisons with other tools have not been run.
 
+## Verified ghost text
+
+Models invent names: a method that sounds right but does not exist. Quill checks every line against the IDE's own index before you see it.
+
+1. Each completed line is parsed in place, in a copy of your file, and every reference it adds must resolve.
+2. A line that uses a name which does not exist is held back, and the model is asked once more with the unknown names marked as off limits. Lines that already passed stay on screen.
+3. If the second try still fails, Quill shows nothing more rather than a wrong line.
+
+Measured on the same 11 cross-file completions (8-file Java project, `deepseek-v4.1-flash-fast`, 2026-11-07), counting suggestions that contain a name the project does not define:
+
+| | Starts with the right call | Contains an invented name | Median time to the whole suggestion |
+| --- | --- | --- | --- |
+| Prompt window only | 6 of 11 | 6 of 11 | 339 ms |
+| With project context | 11 of 11 | 3 of 11 | 295 ms |
+| With project context and verification | 9 of 11 | 0 of 11 | 309 ms |
+
+Verification found 6 invented names, repaired 2 of the 4 suggestions that had them, and withheld the other 2. A repair costs one more request, which is why the 95th percentile is about 1 second. Verified lines appear a line at a time instead of character by character; turn verification off in the settings to get character streaming back. The status bar tooltip counts the names kept off the screen.
+
+The check is by name, so it catches invented members and functions, not wrong argument types. It is skipped for a file when the lines just before the caret already contain names the IDE cannot resolve (no SDK configured, a dynamic language, code you are in the middle of writing), because one unknown type makes everything used on it unknown too. It is tested on Java only.
+
 ## How a suggestion is made
 
 1. The text before and after the caret is trimmed to a token budget at line boundaries, with the context above added as comments.
@@ -52,6 +72,7 @@ Measured on a small made-up Java project of 8 files, with 11 cross-file completi
 | Endpoint | OpenAI compatible `/v1/completions` or `/v1/chat/completions` URL |
 | Model | Model name sent with each request |
 | API key | Kept in the IDE password safe, never in settings files or logs |
+| Check suggestions | Hold back lines with names that do not exist and ask again |
 | Max tokens | Upper bound for one suggestion |
 | Debounce | Pause after the last keystroke, mid word |
 | Excluded files | Comma separated globs matched against file names |

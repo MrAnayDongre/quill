@@ -19,6 +19,27 @@ class Stats(private val window: Int = 50, private val onChange: () -> Unit = {})
         set(State.OK)
     }
 
+    @Volatile
+    var namesCaught = 0
+        private set
+
+    @Volatile
+    var repairs = 0
+        private set
+
+    /** Invented names that were found in a candidate before it reached the screen. */
+    @Synchronized
+    fun caught(names: Int) {
+        namesCaught += names
+        onChange()
+    }
+
+    @Synchronized
+    fun repaired() {
+        repairs++
+        onChange()
+    }
+
     fun markOk() = set(State.OK)
 
     fun markNotConfigured() = set(State.NOT_CONFIGURED)

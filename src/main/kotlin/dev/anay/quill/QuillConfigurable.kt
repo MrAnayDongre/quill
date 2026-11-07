@@ -40,6 +40,10 @@ class QuillConfigurable : BoundSearchableConfigurable("Quill", "dev.anay.quill.s
         val state = QuillSettings.getInstance().state
         return panel {
             row { checkBox("Enable inline completion").bindSelected(state::enabled) }
+            row {
+                checkBox("Check suggestions against the project before showing them").bindSelected(state::verify)
+                    .comment("Lines that use names which do not exist are held back and the model is asked again")
+            }
             group("Server") {
                 row("Preset:") {
                     comboBox(Preset.entries).applyToComponent { selectedItem = Preset.forEndpoint(state.endpoint) }.onChanged { box ->

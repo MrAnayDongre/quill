@@ -65,6 +65,7 @@ class ProviderTest : BasePlatformTestCase() {
     }
 
     fun testShowsCleanedGhostText() {
+        QuillSettings.getInstance().state.verify = false
         myFixture.configureByText("A.kt", "fun main() {\n    val x = <caret>\n}")
         assertEquals("42\n", suggest())
         assertTrue("ghost text should arrive in pieces", pieceCount > 1)

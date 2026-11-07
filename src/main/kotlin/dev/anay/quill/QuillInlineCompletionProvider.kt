@@ -31,14 +31,14 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
 
     override suspend fun getSuggestion(request: InlineCompletionRequest): InlineCompletionSuggestion {
         val state = QuillSettings.getInstance().state
-        val input = readAction { buildInput(request, state.excludedPatterns) } ?: return InlineCompletionSuggestion.Empty
-        val pieces = QuillService.getInstance().engine.stream(input.prompt, input.shape, debounce = input.debounce)
+        val input = readAction { buildInput(request, state.excludedPatterns, state.verify) } ?: return InlineCompletionSuggestion.Empty
+        val pieces = QuillService.getInstance().engine.stream(input.prompt, input.shape, debounce = input.debounce, verifier = input.verifier)
         return InlineCompletionSingleSuggestion.build(elements = pieces.map { InlineCompletionGrayTextElement(it) })
     }
 
-    private class Input(val prompt: FimPrompt, val shape: Shape, val debounce: Boolean)
+    private class Input(val prompt: FimPrompt, val shape: Shape, val debounce: Boolean, val verifier: Verifier?)
 
-    private fun buildInput(request: InlineCompletionRequest, excludedPatterns: String): Input? {
+    private fun buildInput(request: InlineCompletionRequest, excludedPatterns: String, verify: Boolean): Input? {
         val file = request.file.virtualFile ?: return null
         val document = request.document
         val caret = request.endOffset
@@ -54,7 +54,8 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
         val prompt = PromptBuilder.build(before, after, context, commentPrefix, WINDOW_TOKENS)
         val shape = Shape(singleLine = after.substringBefore('\n').isNotBlank(), stops = Cleanup.stopsFor(language.id))
         // A manual request is an explicit ask, so it skips the typing debounce.
-        return Input(prompt, shape, debounce = request.event !is InlineCompletionEvent.DirectCall)
+        val verifier = if (verify && document.textLength <= MAX_VERIFIED_CHARS) PsiVerifier(request.file, document.text, caret, commentPrefix) else null
+        return Input(prompt, shape, debounce = request.event !is InlineCompletionEvent.DirectCall, verifier = verifier)
     }
 
     private fun editorOf(event: InlineCompletionEvent): Editor? = when (event) {
@@ -66,5 +67,7 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
     private companion object {
         // ponytail: fixed prompt window; promote to a setting for models with small contexts.
         const val WINDOW_TOKENS = 1500
+        // ponytail: very large files are not re-parsed per line; raise it if parsing proves cheap enough.
+        const val MAX_VERIFIED_CHARS = 300_000
     }
 }

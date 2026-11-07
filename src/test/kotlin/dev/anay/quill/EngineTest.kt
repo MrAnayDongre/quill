@@ -42,6 +42,55 @@ class EngineTest {
         assertEquals("return a * b + c", pieces.joinToString(""))
     }
 
+    private val rejectsBad = Verifier { candidate ->
+        if (candidate.contains("bad")) Problems(listOf("bad"), "// Do not use these names: bad\n") else null
+    }
+
+    @Test
+    fun verifiedLinesAreShownOneAtATime() = runBlocking {
+        backend.answer = { "a\nb\nc" }
+        val pieces = engine.stream(prompt("p"), shape, verifier = rejectsBad).toList()
+        assertEquals(listOf("a\n", "b\n", "c"), pieces)
+        assertEquals(1, backend.requests.size)
+    }
+
+    @Test
+    fun aLineWithInventedNamesIsNeverShownAndTheModelIsAskedAgain() = runBlocking {
+        backend.answer = { if (it.prompt.prefix.contains("Do not use")) "fixed\nmore\n" else "ok\nbad\nrest\n" }
+        val out = engine.stream(prompt("p"), shape, verifier = rejectsBad).toList().joinToString("")
+        assertEquals("ok\nfixed\nmore\n", out)
+        assertEquals(2, backend.requests.size)
+        assertEquals("// Do not use these names: bad\npok\n", backend.requests[1].prompt.prefix)
+        assertEquals(1, stats.namesCaught)
+        assertEquals(1, stats.repairs)
+    }
+
+    @Test
+    fun aRepairThatFailsAgainStopsWithoutAThirdRequest() = runBlocking {
+        backend.answer = { if (it.prompt.prefix.endsWith("ok\n")) "bad\nrest\n" else "ok\nbad\nrest\n" }
+        val out = engine.stream(prompt("p"), shape, verifier = rejectsBad).toList().joinToString("")
+        assertEquals("ok\n", out)
+        assertEquals(2, backend.requests.size)
+        assertEquals(2, stats.namesCaught)
+        assertEquals(0, stats.repairs)
+    }
+
+    @Test
+    fun anUncheckedAnswerIsNotServedToARequestThatWantsChecking() = runBlocking {
+        backend.answer = { "bad\n" }
+        assertEquals("bad\n", engine.stream(prompt("p"), shape).toList().joinToString(""))
+        assertEquals("", engine.stream(prompt("p"), shape, verifier = rejectsBad).toList().joinToString(""))
+        assertEquals(3, backend.requests.size)
+    }
+
+    @Test
+    fun withoutAVerifierTextIsShownAsItArrives() = runBlocking {
+        backend.chunkSize = 2
+        backend.answer = { "abcdefgh" }
+        assertTrue(engine.stream(prompt("p"), shape).toList().size > 1)
+        assertEquals(0, stats.namesCaught)
+    }
+
     @Test
     fun readingStopsAtTheEndOfTheLineForASingleLineShape() = runBlocking {
         backend.chunkSize = 3
