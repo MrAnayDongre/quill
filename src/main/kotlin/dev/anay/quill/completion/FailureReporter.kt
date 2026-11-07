@@ -1,7 +1,7 @@
 package dev.anay.quill.completion
 
 /** Reports a failure through [sink] once, and stays quiet until a request succeeds again. */
-class FailureReporter(private val sink: (String) -> Unit) {
+internal class FailureReporter(private val sink: (String) -> Unit) {
     private var reported = false
 
     @Synchronized

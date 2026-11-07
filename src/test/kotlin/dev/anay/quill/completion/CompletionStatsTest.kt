@@ -20,19 +20,6 @@ class CompletionStatsTest {
     }
 
     @Test
-    fun labelFollowsTheState() {
-        val stats = CompletionStats()
-        assertEquals("Quill", stats.label(enabled = true))
-        assertEquals("Quill off", stats.label(enabled = false))
-        stats.recordFirstText(310)
-        assertEquals("Quill 310 ms", stats.label(true))
-        stats.markNotConfigured()
-        assertEquals("Quill: add key", stats.label(true))
-        stats.markFailing()
-        assertEquals("Quill: offline", stats.label(true))
-    }
-
-    @Test
     fun changesAreAnnounced() {
         var calls = 0
         val stats = CompletionStats(onChange = { calls++ })

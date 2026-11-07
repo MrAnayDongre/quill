@@ -25,7 +25,7 @@ import java.util.concurrent.CompletionException
  * request with a cursor marker; any other endpoint gets a completions request with the `suffix` field for fill in
  * the middle.
  */
-class OpenAiBackend(private val endpoint: suspend () -> Endpoint) : CompletionBackend, AutoCloseable {
+internal class OpenAiBackend(private val endpoint: suspend () -> Endpoint) : CompletionBackend, AutoCloseable {
 
     // Building a client loads the TLS stack, so it happens on first use and never on the UI thread.
     private val clientHolder = lazy { HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build() }

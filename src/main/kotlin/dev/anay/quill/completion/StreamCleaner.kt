@@ -5,7 +5,7 @@ package dev.anay.quill.completion
  * a tail that might turn into a fence, a stop sequence or a repeat of the text after the caret. All pieces joined
  * equal [Cleanup.clean] of the whole answer, whatever the chunking.
  */
-class StreamCleaner(private val after: String, private val shape: Shape) {
+internal class StreamCleaner(private val after: String, private val shape: Shape) {
     private val raw = StringBuilder()
     private var emitted = 0
 

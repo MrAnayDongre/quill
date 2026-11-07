@@ -10,7 +10,9 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.wm.WindowManager
+import dev.anay.quill.QuillBundle
 import dev.anay.quill.backend.ConnectionProbe
+import dev.anay.quill.backend.ProbeResult
 import dev.anay.quill.backend.Endpoint
 import dev.anay.quill.backend.EndpointPolicy
 import dev.anay.quill.backend.NotConfiguredException
@@ -34,8 +36,8 @@ class QuillService(private val scope: CoroutineScope) : Disposable {
     private val backend = OpenAiBackend(::currentEndpoint)
     private val lastWarmUp = AtomicLong(0)
 
-    val stats = CompletionStats(onChange = ::refreshStatusBar)
-    val engine = CompletionEngine(backend, ::currentConfig, FailureReporter(::notifyFailure), stats)
+    internal val stats = CompletionStats(onChange = ::refreshStatusBar)
+    internal val engine = CompletionEngine(backend, ::currentConfig, FailureReporter(::notifyFailure), stats)
 
     /** Called on editor activity. Keeps the connection to the server open so the first suggestion is not slower. */
     fun keepWarm() {
@@ -46,7 +48,7 @@ class QuillService(private val scope: CoroutineScope) : Disposable {
     }
 
     /** Runs the settings page "Test connection" with the values currently typed into it. */
-    fun testConnection(url: String, model: String, typedKey: String?, onResult: (String) -> Unit) {
+    internal fun testConnection(url: String, model: String, typedKey: String?, onResult: (ProbeResult) -> Unit) {
         scope.launch {
             val key = typedKey ?: ApiKeyStore.getInstance().get()
             OpenAiBackend({ endpointFor(url, model, key) }).use { onResult(ConnectionProbe.run(it)) }
@@ -78,8 +80,8 @@ class QuillService(private val scope: CoroutineScope) : Disposable {
 
     private fun notifyFailure(message: String) {
         NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
-            .createNotification("Quill", message, NotificationType.WARNING)
-            .addAction(NotificationAction.createSimple("Open settings") {
+            .createNotification(QuillBundle.message("notification.title"), message, NotificationType.WARNING)
+            .addAction(NotificationAction.createSimple(QuillBundle.message("notification.open.settings")) {
                 ShowSettingsUtil.getInstance().showSettingsDialog(null, QuillConfigurable::class.java)
             })
             .notify(null)

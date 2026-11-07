@@ -16,14 +16,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.atomic.AtomicReference
 
-data class EngineConfig(val maxTokens: Int, val debounceMs: Long, val requestTimeoutMs: Long)
+internal data class EngineConfig(val maxTokens: Int, val debounceMs: Long, val requestTimeoutMs: Long)
 
 /**
  * Turns a prompt into a stream of cleaned completion text: cache lookup, debounce, one request in flight at a
  * time, a timeout, and output cleanup. The first characters are emitted as soon as they are safe to show, and
  * reading stops the moment the answer is complete. Cancellation always propagates to the HTTP request.
  */
-class CompletionEngine(
+internal class CompletionEngine(
     private val backend: CompletionBackend,
     private val config: () -> EngineConfig,
     private val reporter: FailureReporter,

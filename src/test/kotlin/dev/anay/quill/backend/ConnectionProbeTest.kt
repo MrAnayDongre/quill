@@ -9,25 +9,31 @@ import org.junit.Test
 class ConnectionProbeTest {
     @Test
     fun summarisesASuccessfulRequest() = runBlocking {
-        val message = ConnectionProbe.run(FakeBackend(answer = { "a + b" }))
-        assertTrue(message, Regex("""Connected · first token \d+ ms · "a \+ b"""").matches(message))
+        val result = ConnectionProbe.run(FakeBackend(answer = { " a + b " })) as ProbeResult.Connected
+        assertEquals("a + b", result.sample)
+        assertTrue(result.firstTokenMs >= 0)
     }
 
     @Test
-    fun showsTheSafeFailureMessage() = runBlocking {
+    fun keepsTheSafeFailureMessage() = runBlocking {
         val backend = FakeBackend().apply { failure = BackendException("The server answered HTTP 401") }
-        assertEquals("The server answered HTTP 401", ConnectionProbe.run(backend))
+        assertEquals("The server answered HTTP 401", (ConnectionProbe.run(backend) as ProbeResult.Failed).message)
     }
 
     @Test
-    fun missingKeyIsExplained() = runBlocking {
+    fun missingKeyIsItsOwnResult() = runBlocking {
         val backend = FakeBackend().apply { failure = NotConfiguredException() }
-        assertTrue(ConnectionProbe.run(backend).startsWith("Add an API key"))
+        assertEquals(ProbeResult.NotConfigured, ConnectionProbe.run(backend))
+    }
+
+    @Test
+    fun emptyAnswerIsReported() = runBlocking {
+        assertEquals(ProbeResult.Empty, ConnectionProbe.run(FakeBackend(answer = { "" })))
     }
 
     @Test
     fun givesUpAfterTheTimeout() = runBlocking {
         val backend = FakeBackend().apply { gate = CompletableDeferred() }
-        assertEquals("No answer within 0 seconds", ConnectionProbe.run(backend, timeoutMs = 50))
+        assertTrue(ConnectionProbe.run(backend, timeoutMs = 50) is ProbeResult.TimedOut)
     }
 }

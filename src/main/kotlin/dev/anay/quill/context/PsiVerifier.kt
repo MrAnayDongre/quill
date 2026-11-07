@@ -16,7 +16,7 @@ import dev.anay.quill.completion.Verifier
  * the file, and every reference it adds must resolve. A name that does not exist anywhere in the project is the
  * most common way a model is wrong, and the IDE's index can tell for certain.
  */
-class PsiVerifier(
+internal class PsiVerifier(
     private val file: PsiFile,
     private val original: String,
     private val caret: Int,

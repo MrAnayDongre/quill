@@ -1,12 +1,12 @@
 package dev.anay.quill.completion
 
 /** Text that is sent to the model: everything before the caret (with context on top) and everything after it. */
-data class FimPrompt(val prefix: String, val suffix: String)
+internal data class FimPrompt(val prefix: String, val suffix: String)
 
 /** A few lines taken from another file of the project. */
-data class ContextSnippet(val path: String, val text: String)
+internal data class ContextSnippet(val path: String, val text: String)
 
-object PromptBuilder {
+internal object PromptBuilder {
     // ponytail: four characters per token is a rough rule that holds for code across common tokenizers;
     // swap in the model's tokenizer if budgets need to be exact.
     const val CHARS_PER_TOKEN = 4

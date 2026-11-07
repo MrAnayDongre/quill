@@ -15,16 +15,11 @@ internal class QuillStatusWidget(private val project: Project) : StatusBarWidget
 
     override fun getPresentation(): StatusBarWidget.WidgetPresentation = this
 
-    override fun getText(): String = QuillService.getInstance().stats.label(QuillSettings.getInstance().state.enabled)
+    override fun getText(): String = statusLabel(QuillSettings.getInstance().state.enabled, QuillService.getInstance().stats)
 
     override fun getAlignment(): Float = Component.CENTER_ALIGNMENT
 
-    override fun getTooltipText(): String {
-        val stats = QuillService.getInstance().stats
-        val speed = stats.median()?.let { "Median ${it} ms, 95th percentile ${stats.p95()} ms over the last ${stats.count()} suggestions. " } ?: ""
-        val checked = if (stats.namesCaught > 0) "Kept ${stats.namesCaught} invented names off the screen, ${stats.repairs} suggestions repaired. " else ""
-        return "$speed${checked}Click to open Quill settings"
-    }
+    override fun getTooltipText(): String = statusTooltip(QuillService.getInstance().stats)
 
     override fun getClickConsumer(): Consumer<MouseEvent> = Consumer {
         ShowSettingsUtil.getInstance().showSettingsDialog(project, QuillConfigurable::class.java)

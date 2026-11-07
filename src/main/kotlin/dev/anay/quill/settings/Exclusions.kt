@@ -4,7 +4,7 @@ import java.nio.file.FileSystems
 import java.nio.file.Path
 import java.util.regex.PatternSyntaxException
 
-object Exclusions {
+internal object Exclusions {
     // Environment files hold secrets by convention, so they stay excluded whatever the user configures.
     private const val ALWAYS = ".env, .env.*, *.env"
 

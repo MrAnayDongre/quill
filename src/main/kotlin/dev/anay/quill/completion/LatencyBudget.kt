@@ -4,7 +4,7 @@ package dev.anay.quill.completion
  * Shrinks the token allowance when the server is slower than the latency budget, so suggestions
  * keep arriving while the user is still looking at the line.
  */
-class LatencyBudget {
+internal class LatencyBudget {
     private var averageMs = 0.0
 
     @Synchronized

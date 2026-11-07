@@ -10,7 +10,7 @@ import dev.anay.quill.completion.ContextSnippet
 import dev.anay.quill.settings.Exclusions
 
 /** Picks the first lines of a few other project files. Call it inside a read action. */
-object NeighbourFiles {
+internal object NeighbourFiles {
     private const val MAX_FILES = 3
     private const val MAX_LINES = 15
     private const val MAX_FILE_BYTES = 256 * 1024L

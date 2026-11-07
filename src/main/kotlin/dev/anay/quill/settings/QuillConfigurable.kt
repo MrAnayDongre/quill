@@ -13,18 +13,19 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
-import dev.anay.quill.backend.Endpoint
+import dev.anay.quill.QuillBundle
+import dev.anay.quill.backend.ProbeResult
 import dev.anay.quill.backend.EndpointPolicy
 import dev.anay.quill.ide.QuillService
 import javax.swing.JPasswordField
 
 /** One click setup for the common servers. Choosing "Custom" leaves the fields as they are. */
-private enum class Preset(val label: String, val endpoint: String?, val model: String?) {
-    OLLAMA("Ollama (local)", "http://localhost:11434/v1/completions", "qwen2.5-coder:1.5b-base"),
-    CORALBRICKS("CoralBricks", "https://inference.coralbricks.ai/v1/chat/completions", "deepseek-v4.1-flash-fast"),
-    CUSTOM("Custom", null, null);
+private enum class Preset(private val labelKey: String, val endpoint: String?, val model: String?) {
+    OLLAMA("settings.preset.ollama", "http://localhost:11434/v1/completions", "qwen2.5-coder:1.5b-base"),
+    CORALBRICKS("settings.preset.coralbricks", "https://inference.coralbricks.ai/v1/chat/completions", "deepseek-v4.1-flash-fast"),
+    CUSTOM("settings.preset.custom", null, null);
 
-    override fun toString() = label
+    override fun toString(): String = QuillBundle.message(labelKey)
 
     companion object {
         fun forEndpoint(endpoint: String): Preset = entries.firstOrNull { it.endpoint == endpoint } ?: CUSTOM
@@ -41,54 +42,62 @@ class QuillConfigurable : BoundSearchableConfigurable("Quill", "dev.anay.quill.s
     override fun createPanel(): DialogPanel {
         val state = QuillSettings.getInstance().state
         return panel {
-            row { checkBox("Enable inline completion").bindSelected(state::enabled) }
+            row { checkBox(QuillBundle.message("settings.enable")).bindSelected(state::enabled) }
             row {
-                checkBox("Check suggestions against the project before showing them").bindSelected(state::verify)
-                    .comment("Lines that use names which do not exist are held back and the model is asked again")
+                checkBox(QuillBundle.message("settings.verify")).bindSelected(state::verify)
+                    .comment(QuillBundle.message("settings.verify.comment"))
             }
-            group("Server") {
-                row("Preset:") {
+            group(QuillBundle.message("settings.group.server")) {
+                row(QuillBundle.message("settings.preset")) {
                     comboBox(Preset.entries).applyToComponent { selectedItem = Preset.forEndpoint(state.endpoint) }.onChanged { box ->
                         val preset = box.selectedItem as Preset
                         preset.endpoint?.let { endpointField.component.text = it }
                         preset.model?.let { modelField.component.text = it }
                     }
                 }
-                row("Endpoint:") {
+                row(QuillBundle.message("settings.endpoint")) {
                     endpointField = textField().columns(COLUMNS_LARGE).bindText(state::endpoint)
-                        .comment("An OpenAI compatible /v1/completions or /v1/chat/completions URL")
+                        .comment(QuillBundle.message("settings.endpoint.comment"))
                         .validationOnApply { field -> EndpointPolicy.validate(field.text)?.let { error(it) } }
                 }
-                row("Model:") { modelField = textField().columns(COLUMNS_LARGE).bindText(state::model) }
-                row("API key:") {
+                row(QuillBundle.message("settings.model")) { modelField = textField().columns(COLUMNS_LARGE).bindText(state::model) }
+                row(QuillBundle.message("settings.key")) {
                     keyField = passwordField().columns(COLUMNS_LARGE).bindText(::apiKey)
-                        .comment("Kept in the IDE password safe. Leave empty to keep the stored key.")
-                    button("Remove Stored Key") { ApiKeyStore.getInstance().save(null) }
+                        .comment(QuillBundle.message("settings.key.comment"))
+                    button(QuillBundle.message("settings.key.remove")) { ApiKeyStore.getInstance().save(null) }
                 }
                 row {
-                    button("Test Connection") { testConnection() }
+                    button(QuillBundle.message("settings.test")) { testConnection() }
                     cell(result)
                 }
             }
-            group("Behaviour") {
-                row("Max tokens:") { intTextField(QuillSettings.TOKENS).bindIntText(state::maxTokens) }
-                row("Debounce (ms):") { intTextField(QuillSettings.DEBOUNCE_MS).bindIntText(state::debounceMs) }
-                row("Excluded files:") {
+            group(QuillBundle.message("settings.group.behaviour")) {
+                row(QuillBundle.message("settings.tokens")) { intTextField(QuillSettings.TOKENS).bindIntText(state::maxTokens) }
+                row(QuillBundle.message("settings.debounce")) { intTextField(QuillSettings.DEBOUNCE_MS).bindIntText(state::debounceMs) }
+                row(QuillBundle.message("settings.excluded")) {
                     textField().columns(COLUMNS_LARGE).bindText(state::excludedPatterns)
-                        .comment("Comma separated globs matched against file names. Environment files are always excluded.")
+                        .comment(QuillBundle.message("settings.excluded.comment"))
                 }
             }
         }
     }
 
     private fun testConnection() {
-        result.text = "Testing..."
+        result.text = QuillBundle.message("settings.test.running")
         val url = endpointField.component.text.trim()
         EndpointPolicy.validate(url)?.let { result.text = it; return }
         val typedKey = String(keyField.component.password)
-        QuillService.getInstance().testConnection(url, modelField.component.text.trim(), typedKey.ifEmpty { null }) { message ->
-            ApplicationManager.getApplication().invokeLater({ result.text = message }, ModalityState.any())
+        QuillService.getInstance().testConnection(url, modelField.component.text.trim(), typedKey.ifEmpty { null }) { probe ->
+            ApplicationManager.getApplication().invokeLater({ result.text = describe(probe) }, ModalityState.any())
         }
+    }
+
+    private fun describe(probe: ProbeResult): String = when (probe) {
+        is ProbeResult.Connected -> QuillBundle.message("probe.connected", probe.firstTokenMs, probe.sample)
+        ProbeResult.Empty -> QuillBundle.message("probe.empty")
+        is ProbeResult.TimedOut -> QuillBundle.message("probe.timeout", probe.seconds)
+        ProbeResult.NotConfigured -> QuillBundle.message("probe.no.key")
+        is ProbeResult.Failed -> probe.message
     }
 
     override fun apply() {

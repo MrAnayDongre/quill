@@ -8,11 +8,13 @@
 
     <depends>com.intellij.modules.platform</depends>
 
+    <resource-bundle>messages.QuillBundle</resource-bundle>
+
     <extensions defaultExtensionNs="com.intellij">
         <inline.completion.provider implementation="dev.anay.quill.ide.QuillInlineCompletionProvider"/>
         <applicationConfigurable parentId="tools" instance="dev.anay.quill.settings.QuillConfigurable"
                                  id="dev.anay.quill.settings" displayName="Quill"/>
         <statusBarWidgetFactory id="dev.anay.quill.status" implementation="dev.anay.quill.ide.QuillStatusBarFactory"/>
-        <notificationGroup id="Quill" displayType="BALLOON"/>
+        <notificationGroup id="Quill" displayType="BALLOON" key="notification.group.name"/>
     </extensions>
 </idea-plugin>

@@ -1,9 +1,9 @@
 package dev.anay.quill.completion
 
 /** What the model's raw text has to become before it is shown as ghost text. */
-data class Shape(val singleLine: Boolean, val stops: List<String>)
+internal data class Shape(val singleLine: Boolean, val stops: List<String>)
 
-object Cleanup {
+internal object Cleanup {
     private val fenceOpen = Regex("^\\s*```[\\w+-]*[ \\t]*\\r?\\n?")
     private const val FENCE = "```"
 

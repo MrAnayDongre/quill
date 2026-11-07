@@ -3,7 +3,7 @@ package dev.anay.quill.backend
 import java.net.URI
 import java.time.Duration
 
-data class Endpoint(val url: String, val model: String, val apiKey: String?, val timeout: Duration) {
+internal data class Endpoint(val url: String, val model: String, val apiKey: String?, val timeout: Duration) {
     val isChat: Boolean get() = URI(url).path.orEmpty().trimEnd('/').endsWith("/chat/completions")
 
     init {
@@ -14,7 +14,7 @@ data class Endpoint(val url: String, val model: String, val apiKey: String?, val
     }
 }
 
-object EndpointPolicy {
+internal object EndpointPolicy {
     /** Returns a message describing why [url] cannot be used, or null if it is fine. */
     fun validate(url: String): String? {
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return "The endpoint is not a valid URL"

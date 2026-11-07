@@ -13,7 +13,7 @@ import java.util.Optional
 
 /** The only place the API key is kept. Reads are cached because the password safe can be slow. */
 @Service(Service.Level.APP)
-class ApiKeyStore(private val scope: CoroutineScope) {
+internal class ApiKeyStore(private val scope: CoroutineScope) {
     private val attributes = CredentialAttributes(generateServiceName("Quill", "apiKey"))
 
     @Volatile

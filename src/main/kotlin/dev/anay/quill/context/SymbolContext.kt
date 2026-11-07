@@ -22,7 +22,7 @@ import dev.anay.quill.settings.Exclusions
  * the reference and name APIs every language plugin implements, so there is no per language code. Call it inside
  * a read action.
  */
-object SymbolContext {
+internal object SymbolContext {
     private const val MAX_SCOPES = 3
     private const val MAX_DECLARATIONS = 8
     private const val MAX_RECEIVER_TYPES = 2

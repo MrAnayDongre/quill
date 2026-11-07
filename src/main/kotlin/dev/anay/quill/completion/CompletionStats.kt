@@ -1,7 +1,7 @@
 package dev.anay.quill.completion
 
 /** What the user sees about speed and health. Fed by the engine, read by the status bar. */
-class CompletionStats(private val window: Int = 50, private val onChange: () -> Unit = {}) {
+internal class CompletionStats(private val window: Int = 50, private val onChange: () -> Unit = {}) {
     enum class State { IDLE, OK, NOT_CONFIGURED, FAILING }
 
     private val samples = ArrayDeque<Long>()
@@ -62,13 +62,5 @@ class CompletionStats(private val window: Int = 50, private val onChange: () -> 
         val changed = state != next
         state = next
         if (changed || next == State.OK) onChange()
-    }
-
-    /** The status bar label: short, with the number a user cares about. */
-    fun label(enabled: Boolean): String = when {
-        !enabled -> "Quill off"
-        state == State.NOT_CONFIGURED -> "Quill: add key"
-        state == State.FAILING -> "Quill: offline"
-        else -> median()?.let { "Quill $it ms" } ?: "Quill"
     }
 }
