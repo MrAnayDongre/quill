@@ -1,0 +1,10 @@
+<idea-plugin>
+    <id>dev.anay.quill</id>
+    <name>Quill</name>
+    <vendor>Anay</vendor>
+    <description><![CDATA[
+        <p>Inline code completion as ghost text, backed by any OpenAI compatible completions endpoint.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+</idea-plugin>
