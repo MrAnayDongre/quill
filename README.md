@@ -2,7 +2,7 @@
 
 Ghost text completion for JetBrains IDEs that streams suggestions as the model writes them, and shows you how fast it is.
 
-Median time from request to the first suggestion character: **250 ms**, against 392 ms until the whole suggestion has arrived. That is 20 runs of a 418 character multi-line completion with `deepseek-v4.1-flash-fast` on CoralBricks, on 2026-11-07 from a Linux desktop. The debounce is not included: it is 20 ms after `.`, `(`, `,`, `{`, `=`, `:` and a newline, and 150 ms by default in the middle of a word. On a local Ollama `llama3.1` (6 runs, 44 characters on average) the median was 94 ms against 230 ms; the 95th percentile was 6.8 s because of a cold model load.
+With verification off, the median time from request to the first suggestion character is **250 ms**, against 392 ms until the whole suggestion has arrived. With verification on, which is the default, text appears a line at a time: the median time to the whole suggestion was about 400 ms and the 95th percentile about 1.2 s on the 20 case test below, and the status bar read 1,154 ms in a real window through a slow relay. That is 20 runs of a 418 character multi-line completion with `deepseek-v4.1-flash-fast` on CoralBricks, on 2026-11-07 from a Linux desktop. The debounce is not included: it is 20 ms after `.`, `(`, `,`, `{`, `=`, `:` and a newline, and 150 ms by default in the middle of a word. On a local Ollama `llama3.1` (6 runs, 44 characters on average) the median was 94 ms against 230 ms; the 95th percentile was 6.8 s because of a cold model load.
 
 Quill talks to any OpenAI compatible server, so you pick the model and keep the key. Tab accepts a suggestion. The platform's actions for accepting the next word or line are in Settings | Keymap, under "inline completion".
 
@@ -35,7 +35,7 @@ Quill gives the model what a person reading the code would look up, using the ID
 - **Recent edits.** The last few lines you changed, in any file, because what someone just did is the best hint of what they do next. Text from excluded files is never kept.
 - **Neighbour files.** The first lines of other open or recently edited files.
 
-This uses the reference and name APIs that every language plugin implements, so there is no per language code. Tested on Java and Kotlin (the context and the check both work) and on TypeScript (the context works; the check never blocks a suggestion there, because TypeScript does not report an unknown property as an unresolved reference). Python is not covered: the IDE used for testing has no Python support.
+This uses the reference and name APIs that every language plugin implements, so there is no per language code. Tested on Java and Kotlin (the context and the check both work) and on TypeScript (the context works; in the test the check did not flag an invented member, and the cause was not confirmed: it may be how TypeScript references resolve, or the file being judged unfit). Python is not covered: the IDE used for testing has no Python support.
 
 ## Measured
 

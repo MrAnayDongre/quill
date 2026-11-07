@@ -1,6 +1,6 @@
 package dev.anay.quill.context
 
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import dev.anay.quill.completion.ContextSnippet
 import dev.anay.quill.completion.Problems
@@ -11,7 +11,7 @@ import kotlinx.coroutines.runBlocking
 class LanguageSupportTest : BasePlatformTestCase() {
     private fun snippets(): List<ContextSnippet> {
         val caret = myFixture.editor.caretModel.offset
-        return ReadAction.compute<List<ContextSnippet>, RuntimeException> { SymbolContext.collect(myFixture.file, caret, 0, "") }
+        return runReadActionBlocking { SymbolContext.collect(myFixture.file, caret, 0, "") }
     }
 
     private fun problems(candidate: String): Problems? {
