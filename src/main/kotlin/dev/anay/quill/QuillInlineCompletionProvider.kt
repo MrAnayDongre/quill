@@ -12,7 +12,7 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 /** Stateless: everything that varies lives in [QuillService], so the provider can be created and dropped freely. */
 class QuillInlineCompletionProvider : InlineCompletionProvider {
@@ -24,15 +24,16 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
         if (!state.enabled) return false
         val editor = editorOf(event) ?: return false
         val file = FileDocumentManager.getInstance().getFile(editor.document) ?: return false
-        return !Exclusions.isExcluded(file.name, state.excludedPatterns)
+        if (Exclusions.isExcluded(file.name, state.excludedPatterns)) return false
+        QuillService.getInstance().keepWarm()
+        return true
     }
 
     override suspend fun getSuggestion(request: InlineCompletionRequest): InlineCompletionSuggestion {
         val state = QuillSettings.getInstance().state
         val input = readAction { buildInput(request, state.excludedPatterns) } ?: return InlineCompletionSuggestion.Empty
-        val text = QuillService.getInstance().engine.complete(input.prompt, input.shape, debounce = input.debounce)
-            ?: return InlineCompletionSuggestion.Empty
-        return InlineCompletionSingleSuggestion.build(elements = flowOf(InlineCompletionGrayTextElement(text)))
+        val pieces = QuillService.getInstance().engine.stream(input.prompt, input.shape, debounce = input.debounce)
+        return InlineCompletionSingleSuggestion.build(elements = pieces.map { InlineCompletionGrayTextElement(it) })
     }
 
     private class Input(val prompt: FimPrompt, val shape: Shape, val debounce: Boolean)

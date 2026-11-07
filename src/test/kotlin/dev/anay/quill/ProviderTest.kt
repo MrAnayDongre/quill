@@ -23,9 +23,12 @@ class ProviderTest : BasePlatformTestCase() {
         server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
         server.createContext("/v1/completions") { exchange ->
             bodies += exchange.requestBody.readAllBytes().toString(Charsets.UTF_8)
-            val bytes = """{"choices":[{"text":"```\n42\n```"}]}""".toByteArray()
-            exchange.sendResponseHeaders(200, bytes.size.toLong())
-            exchange.responseBody.write(bytes)
+            exchange.sendResponseHeaders(200, 0)
+            listOf("```\n", "4", "2\n", "```").forEach {
+                exchange.responseBody.write("data: {\"choices\":[{\"text\":\"${it.replace("\n", "\\n")}\"}]}\n\n".toByteArray())
+                exchange.responseBody.flush()
+            }
+            exchange.responseBody.write("data: [DONE]\n\n".toByteArray())
             exchange.close()
         }
         server.start()
@@ -48,18 +51,23 @@ class ProviderTest : BasePlatformTestCase() {
     @Suppress("DEPRECATION")
     private fun directCall() = InlineCompletionEvent.DirectCall(myFixture.editor, myFixture.editor.caretModel.currentCaret, DataContext.EMPTY_CONTEXT)
 
+    private var pieceCount = 0
+
     private fun suggest(): String? {
         val editor = myFixture.editor
         val offset = editor.caretModel.offset
         val request = InlineCompletionRequest(directCall(), myFixture.file, editor, editor.document, offset, offset, null)
         val suggestion = runBlocking(Dispatchers.Default) { QuillInlineCompletionProvider().getSuggestion(request) }
         if (suggestion === InlineCompletionSuggestion.Empty) return null
-        return runBlocking { suggestion.getVariants().single().elements.toList().joinToString("") { it.text } }
+        val pieces = runBlocking { suggestion.getVariants().single().elements.toList().map { it.text } }
+        pieceCount = pieces.size
+        return pieces.joinToString("")
     }
 
     fun testShowsCleanedGhostText() {
         myFixture.configureByText("A.kt", "fun main() {\n    val x = <caret>\n}")
         assertEquals("42\n", suggest())
+        assertTrue("ghost text should arrive in pieces", pieceCount > 1)
         assertTrue(bodies.single().contains("val x = "))
         assertTrue(bodies.single().contains("\\n}"))
     }

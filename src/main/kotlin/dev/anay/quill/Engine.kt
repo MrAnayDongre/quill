@@ -3,17 +3,16 @@ package dev.anay.quill
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.transformWhile
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.atomic.AtomicReference
 
-data class EngineConfig(
-    val maxTokens: Int,
-    val debounceMs: Long,
-    val requestTimeoutMs: Long,
-)
+data class EngineConfig(val maxTokens: Int, val debounceMs: Long, val requestTimeoutMs: Long)
 
 /** Reports a failure through [sink] once, and stays quiet until a request succeeds again. */
 class FailureReporter(private val sink: (String) -> Unit) {
@@ -57,13 +56,15 @@ class LatencyBudget {
 }
 
 /**
- * Turns a prompt into cleaned completion text: cache lookup, debounce, one request in flight at a time,
- * a timeout, and output cleanup. Returns null for "nothing to show"; cancellation always propagates.
+ * Turns a prompt into a stream of cleaned completion text: cache lookup, debounce, one request in flight at a
+ * time, a timeout, and output cleanup. The first characters are emitted as soon as they are safe to show, and
+ * reading stops the moment the answer is complete. Cancellation always propagates to the HTTP request.
  */
 class CompletionEngine(
     private val backend: CompletionBackend,
     private val config: () -> EngineConfig,
     private val reporter: FailureReporter,
+    private val stats: Stats = Stats(),
     private val cacheSize: Int = 64,
 ) {
     private data class Key(val prompt: FimPrompt, val shape: Shape)
@@ -75,36 +76,46 @@ class CompletionEngine(
     private val inFlight = AtomicReference<Job?>()
     private val latency = LatencyBudget()
 
-    suspend fun complete(prompt: FimPrompt, shape: Shape, debounce: Boolean = true): String? {
+    fun stream(prompt: FimPrompt, shape: Shape, debounce: Boolean = true): Flow<String> = channelFlow {
         val key = Key(prompt, shape)
-        synchronized(cache) { cache[key] }?.let { return it }
+        val hit = synchronized(cache) { cache[key] }
+        if (hit != null) {
+            send(hit)
+            return@channelFlow
+        }
         val settings = config()
-        return coroutineScope {
-            val job = async { fetch(prompt, shape, settings, debounce) }
-            inFlight.getAndSet(job)?.cancel()
-            try {
-                job.await()
-            } finally {
-                inFlight.compareAndSet(job, null)
-            }
-        }?.also { synchronized(cache) { cache[key] = it } }
+        val job = launch { run(key, settings, if (debounce) debounceFor(prompt.prefix, settings.debounceMs) else 0) }
+        inFlight.getAndSet(job)?.cancel()
+        job.invokeOnCompletion { inFlight.compareAndSet(job, null) }
     }
 
-    private suspend fun fetch(prompt: FimPrompt, shape: Shape, settings: EngineConfig, debounce: Boolean): String? {
-        if (debounce) delay(settings.debounceMs)
-        val wanted = if (shape.singleLine) minOf(settings.maxTokens, SINGLE_LINE_TOKENS) else settings.maxTokens
-        val tokens = latency.cap(wanted, LATENCY_BUDGET_MS)
+    private suspend fun ProducerScope<String>.run(key: Key, settings: EngineConfig, debounceMs: Long) {
+        delay(debounceMs)
+        val wanted = if (key.shape.singleLine) minOf(settings.maxTokens, SINGLE_LINE_TOKENS) else settings.maxTokens
+        val request = CompletionRequest(key.prompt, latency.cap(wanted, LATENCY_BUDGET_MS), key.shape.stops)
+        val cleaner = StreamCleaner(key.prompt.suffix, key.shape)
+        val whole = StringBuilder()
         val started = System.nanoTime()
-        return try {
-            val raw = withTimeout(settings.requestTimeoutMs) { backend.complete(CompletionRequest(prompt, tokens, shape.stops)) }
-            latency.record((System.nanoTime() - started) / 1_000_000)
+        var firstMs = -1L
+        try {
+            withTimeout(settings.requestTimeoutMs) {
+                backend.stream(request)
+                    .transformWhile { delta -> emit(cleaner.feed(delta)); !cleaner.done }
+                    .collect { piece -> show(piece, whole, started)?.let { if (firstMs < 0) firstMs = it } }
+            }
+            show(cleaner.finish(), whole, started)?.let { if (firstMs < 0) firstMs = it }
+            val totalMs = (System.nanoTime() - started) / 1_000_000
+            latency.record(totalMs)
+            if (firstMs >= 0) stats.recordFirstText(firstMs) else stats.markOk()
             reporter.success()
-            Cleanup.clean(raw, prompt.suffix, shape).ifEmpty { null }
+            if (whole.isNotEmpty()) synchronized(cache) { cache[key] = whole.toString() }
         } catch (e: CancellationException) {
             // withTimeout throws a CancellationException subclass; only a timeout of our own is a failure.
             if (e !is TimeoutCancellationException) throw e
             latency.record(settings.requestTimeoutMs)
             fail("The completion server did not answer in time")
+        } catch (_: NotConfiguredException) {
+            stats.markNotConfigured()
         } catch (e: BackendException) {
             fail(e.message ?: "The completion request failed")
         } catch (e: RuntimeException) {
@@ -112,14 +123,28 @@ class CompletionEngine(
         }
     }
 
-    private fun fail(message: String): String? {
-        reporter.failure(message)
-        return null
+    /** Sends [piece] to the caller; returns the milliseconds since [started] if it was text. */
+    private suspend fun ProducerScope<String>.show(piece: String, whole: StringBuilder, started: Long): Long? {
+        if (piece.isEmpty()) return null
+        whole.append(piece)
+        send(piece)
+        return (System.nanoTime() - started) / 1_000_000
     }
 
-    private companion object {
-        const val SINGLE_LINE_TOKENS = 48
+    private fun fail(message: String) {
+        stats.markFailing()
+        reporter.failure(message)
+    }
+
+    companion object {
+        private const val SINGLE_LINE_TOKENS = 48
         // ponytail: fixed budget; promote to a setting if users need to tune it.
-        const val LATENCY_BUDGET_MS = 1_500L
+        private const val LATENCY_BUDGET_MS = 1_500L
+        private const val FAST_DEBOUNCE_MS = 20L
+        private const val TRIGGERS = ".(,{[=:>\n"
+
+        /** Right after a structural character the next word is the interesting one, so there is no point waiting. */
+        internal fun debounceFor(prefix: String, baseMs: Long): Long =
+            if (prefix.lastOrNull()?.let { it in TRIGGERS } == true) minOf(baseMs, FAST_DEBOUNCE_MS) else baseMs
     }
 }

@@ -1,8 +1,10 @@
 # Quill
 
-Inline code completion for JetBrains IDEs. Quill shows suggestions as ghost text while you type and talks to any server that implements the OpenAI completions API: llama.cpp, Ollama and vLLM. Two request styles are supported, chosen by the endpoint URL: `.../v1/completions` uses the `suffix` field for fill in the middle (the model must support it), and `.../v1/chat/completions` sends the code around a cursor marker as a chat message, which works with chat only models and hosted providers such as CoralBricks (`https://inference.coralbricks.ai/v1/chat/completions`).
+Ghost text completion for JetBrains IDEs that shows the first characters of a suggestion in about a quarter of a second, and tells you how fast it is.
 
-Press `Tab` to accept the whole suggestion. The platform also ships actions to accept the next word or the next line; bind them under Settings | Keymap by searching for "inline completion".
+Median time to the first visible character: **250 ms**, against 392 ms until the whole suggestion arrives (20 runs, 418 characters on average, `deepseek-v4.1-flash-fast` on CoralBricks, 2026-11-07, Linux desktop). On a local Ollama `llama3.1` the median was 94 ms against 230 ms.
+
+Quill talks to any OpenAI compatible server, so you pick the model and keep the key. Tab accepts a suggestion. The platform's actions for accepting the next word or line are in Settings | Keymap, under "inline completion".
 
 ## Run it
 
@@ -10,47 +12,49 @@ Press `Tab` to accept the whole suggestion. The platform also ships actions to a
 ./gradlew runIde
 ```
 
-This starts a sandbox IntelliJ IDEA with Quill installed. Start a model server first, for example `ollama serve` with `ollama pull qwen2.5-coder:1.5b-base`, then open Settings | Tools | Quill and check the endpoint. Open any source file and start typing.
+This starts a sandbox IntelliJ IDEA with Quill installed. Open Settings | Tools | Quill, pick a preset, paste a key if the server needs one, and press **Test Connection**. It sends one real request and shows, for example, `Connected · first token 290 ms · "a + b"`. Then type in any source file.
+
+The status bar shows the median time to the first suggestion character (`Quill 250 ms`), with the 95th percentile in the tooltip. It reads `Quill: add key` when a hosted server has no key yet, and `Quill: offline` after a failure. Click it to open the settings.
+
+## Why it feels fast
+
+- **Streaming ghost text.** Characters appear while the model is still writing. Output is cleaned as it arrives, holding back only the few characters that could still turn into a code fence, a stop sequence or a repeat of the text after the caret. A test feeds a dozen messy answers in every chunk size and checks that the streamed result equals the cleaned whole.
+- **Stops reading early.** When text follows the caret on the same line, the suggestion is a single line, and the request is cancelled at the first newline. The same happens at a stop sequence or a closing fence. That saves latency and tokens.
+- **Adaptive debounce.** After `.`, `(`, `,`, `{`, `=`, `:` and a newline the request goes out almost at once. In the middle of a word it waits the configured delay.
+- **Warm connection.** A credential free request opens the connection when you start working and again after a pause, so the first suggestion does not pay for the TLS handshake.
+- **One request at a time.** A new request cancels the one in flight, all the way down to the HTTP stream. Identical prompts are answered from a small cache.
+- **Latency budget.** If the server's average gets slower than 1.5 seconds, the token allowance shrinks in proportion. With fast servers it never triggers.
+
+## How a suggestion is made
+
+1. The text before and after the caret is trimmed to a token budget at line boundaries, with the first lines of up to three other open or recent project files added as comments.
+2. A `.../v1/completions` endpoint gets `prompt` and `suffix` (the model must support fill in the middle). A `.../v1/chat/completions` endpoint gets the code around a cursor marker as a chat message, which works with chat only models.
+3. The answer streams back, is cleaned, and is shown.
 
 ## Settings
 
 | Setting | Meaning |
 | --- | --- |
-| Endpoint | Full URL of a completions or chat completions endpoint, for example `http://localhost:11434/v1/completions` |
+| Preset | Fills in endpoint and model for Ollama or CoralBricks |
+| Endpoint | OpenAI compatible `/v1/completions` or `/v1/chat/completions` URL |
 | Model | Model name sent with each request |
-| API key | Stored in the IDE password safe, never in settings files or logs |
+| API key | Kept in the IDE password safe, never in settings files or logs |
 | Max tokens | Upper bound for one suggestion |
-| Debounce | Pause after the last keystroke before a request is sent |
+| Debounce | Pause after the last keystroke, mid word |
 | Excluded files | Comma separated globs matched against file names |
-
-## How a suggestion is made
-
-1. The text before and after the caret is sent as `prompt` and `suffix`, trimmed to a token budget at line boundaries. Servers that ignore `suffix` still work, with prefix only completion.
-2. A few lines from the head of other open or recently edited project files are added as comments above the prefix.
-3. The answer is cleaned: code fences are removed, the text is cut at language specific stop sequences, and anything that repeats the text after the caret is dropped.
-4. Identical prompts are answered from a small cache. A new request cancels the one still in flight.
-
-## Two choices that matter in daily use
-
-Other ideas considered: accept by word or line (the platform already provides it), next edit prediction (needs an edit history and a second model contract), symbol aware retrieval across files (heavier than the head of file context used here), speculative prefetch on idle (doubles server load for a small gain).
-
-Implemented:
-
-- **Latency budget.** Quill tracks a moving average of response times. When the server is slower than 1.5 seconds, the token allowance shrinks in proportion, so suggestions stay short and keep arriving instead of landing after the user has moved on. It recovers by itself when the server speeds up.
-- **Shape aware completion.** When text follows the caret on the same line, Quill asks for a single line, with a lower token limit. Mid line completions never spill into unrelated lines, and they return faster.
 
 ## Privacy and safety
 
-- Files matching the excluded patterns, and always `.env` files, are never used as the edited file or as context.
+- Files matching the excluded patterns, and always `.env` files, are never the edited file or context.
 - Only the text around the caret, plus a few lines from up to three other project files, leaves the IDE.
-- The API key is sent only over https or to a local server. Redirects are not followed.
+- The key is sent only over https or to a local server. Redirects are not followed. The warm-up request carries no key.
 - A failing server produces one notification, then silence until a request succeeds again. Notifications and logs carry a status code, never request or response bodies.
 
 ## Limits
 
 - The inline completion API of the platform is marked internal by JetBrains and may change between IDE versions. The plugin targets IntelliJ IDEA 2026.2 (build 262).
-- Token budgets use four characters per token.
-- Context comes from the head of other files, not from symbol resolution.
+- Token budgets use four characters per token. Context comes from the head of other files, not from symbol resolution.
+- A hosted server with no key stored is treated as not set up; an open remote server needs any placeholder key.
 
 ## Development
 

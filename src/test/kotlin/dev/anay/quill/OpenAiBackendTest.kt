@@ -1,11 +1,11 @@
 package dev.anay.quill
 
 import com.google.gson.JsonParser
+import com.google.gson.JsonPrimitive
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -15,6 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.time.Duration
@@ -26,17 +27,23 @@ class OpenAiBackendTest {
     private lateinit var server: HttpServer
     private val body = AtomicReference<String>()
     private val auth = AtomicReference<String?>()
+    private val method = AtomicReference<String>()
     private val release = CountDownLatch(1)
-    private var handler: (HttpExchange) -> Unit = { reply(it, 200, """{"choices":[{"text":"hello"}]}""") }
+    private val clientGone = CountDownLatch(1)
+    private var handler: (HttpExchange) -> Unit = { sse(it, delta("hello")) }
 
     @Before
     fun start() {
         server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
         server.createContext("/v1") { exchange ->
+            method.set(exchange.requestMethod)
             body.set(exchange.requestBody.readAllBytes().toString(Charsets.UTF_8))
             auth.set(exchange.requestHeaders.getFirst("Authorization"))
-            handler(exchange)
-            exchange.close()
+            try {
+                handler(exchange)
+            } finally {
+                exchange.close()
+            }
         }
         server.start()
     }
@@ -47,7 +54,17 @@ class OpenAiBackendTest {
         server.stop(0)
     }
 
-    private fun reply(exchange: HttpExchange, status: Int, text: String) {
+    private fun delta(text: String) = """{"choices":[{"delta":{"content":${JsonPrimitive(text)}},"text":${JsonPrimitive(text)}}]}"""
+
+    /** Sends each payload as a server sent event, flushing after every one, then ends the stream. */
+    private fun sse(exchange: HttpExchange, vararg payloads: String) {
+        exchange.responseHeaders.add("Content-Type", "text/event-stream")
+        exchange.sendResponseHeaders(200, 0)
+        payloads.forEach { exchange.responseBody.write("data: $it\n\n".toByteArray()).also { exchange.responseBody.flush() } }
+        exchange.responseBody.write("data: [DONE]\n\n".toByteArray())
+    }
+
+    private fun plain(exchange: HttpExchange, status: Int, text: String) {
         val bytes = text.toByteArray()
         exchange.sendResponseHeaders(status, bytes.size.toLong())
         exchange.responseBody.write(bytes)
@@ -59,22 +76,26 @@ class OpenAiBackendTest {
 
     private val request = CompletionRequest(FimPrompt("before", "after"), 64, listOf("\n\n\n", "a", "b", "c", "d"))
 
+    private suspend fun OpenAiBackend.text(): String = stream(request).toList().joinToString("")
+
     @Test
-    fun sendsAFillInTheMiddleRequestAndParsesTheText() = runBlocking {
-        assertEquals("hello", backend().use { it.complete(request) })
+    fun streamsDeltasInOrderAndSendsAFillInTheMiddleRequest() = runBlocking {
+        handler = { sse(it, delta("hel"), delta("lo")) }
+        val pieces = backend().use { it.stream(request).toList() }
+        assertEquals(listOf("hel", "lo"), pieces)
         val json = JsonParser.parseString(body.get()).asJsonObject
         assertEquals("m", json["model"].asString)
         assertEquals("before", json["prompt"].asString)
         assertEquals("after", json["suffix"].asString)
         assertEquals(64, json["max_tokens"].asInt)
+        assertTrue(json["stream"].asBoolean)
         assertEquals(4, json["stop"].asJsonArray.size())
         assertNull(auth.get())
     }
 
     @Test
     fun chatEndpointGetsAMessageWithACursorMarker() = runBlocking {
-        handler = { reply(it, 200, """{"choices":[{"message":{"role":"assistant","content":"a + b"}}]}""") }
-        assertEquals("a + b", backend(path = "chat/completions").use { it.complete(request) })
+        assertEquals("hello", backend(path = "chat/completions").use { it.text() })
         val json = JsonParser.parseString(body.get()).asJsonObject
         assertFalse(json.has("prompt"))
         assertFalse(json.has("suffix"))
@@ -84,50 +105,70 @@ class OpenAiBackendTest {
     }
 
     @Test
+    fun roleOnlyAndEmptyFramesAreSkipped() = runBlocking {
+        handler = { sse(it, """{"choices":[{"delta":{"role":"assistant","content":""}}]}""", """{"choices":[]}""", delta("x")) }
+        assertEquals(listOf("x"), backend(path = "chat/completions").use { it.stream(request).toList() })
+    }
+
+    @Test
     fun sendsTheKeyAsABearerToken() = runBlocking {
-        backend(key = "secret").use { it.complete(request) }
+        backend(key = "secret").use { it.text() }
         assertEquals("Bearer secret", auth.get())
     }
 
     @Test
     fun errorStatusDoesNotLeakTheBody() = runBlocking {
-        handler = { reply(it, 401, "invalid key sk-123") }
-        val failure = runCatching { backend().use { it.complete(request) } }.exceptionOrNull()
+        handler = { plain(it, 401, "invalid key sk-123") }
+        val failure = runCatching { backend().use { it.text() } }.exceptionOrNull()
         assertTrue(failure is BackendException)
         assertEquals("The server answered HTTP 401", failure!!.message)
     }
 
     @Test
-    fun malformedResponseIsAFailure() = runBlocking {
-        handler = { reply(it, 200, """{"choices":[]}""") }
-        assertTrue(runCatching { backend().use { it.complete(request) } }.exceptionOrNull() is BackendException)
+    fun malformedFrameIsAFailure() = runBlocking {
+        handler = { sse(it, "{not json") }
+        assertTrue(runCatching { backend().use { it.text() } }.exceptionOrNull() is BackendException)
     }
 
     @Test
     fun oversizedResponseIsRejected() = runBlocking {
-        handler = { reply(it, 200, "x".repeat((1 shl 20) + 10)) }
-        val failure = runCatching { backend().use { it.complete(request) } }.exceptionOrNull()
+        handler = { sse(it, *Array(40) { delta("x".repeat(30_000)) }) }
+        val failure = runCatching { backend().use { it.text() } }.exceptionOrNull()
         assertEquals("The server response is too large", failure?.message)
     }
 
     @Test
     fun slowServerHitsTheRequestTimeout() = runBlocking {
         handler = { release.await(10, TimeUnit.SECONDS) }
-        val failure = runCatching { backend(timeoutMs = 200).use { it.complete(request) } }.exceptionOrNull()
+        val failure = runCatching { backend(timeoutMs = 200).use { it.text() } }.exceptionOrNull()
         assertEquals("The completion server did not answer in time", failure?.message)
     }
 
     @Test
-    fun cancellingTheCallerAbortsTheExchange() = runBlocking {
-        handler = { release.await(10, TimeUnit.SECONDS) }
-        backend().use { backend ->
-            val call = async { backend.complete(request) }
-            while (body.get() == null) delay(5)
-            val started = System.nanoTime()
-            call.cancel()
-            assertTrue(runCatching { call.await() }.exceptionOrNull() is CancellationException)
-            assertTrue((System.nanoTime() - started) / 1_000_000 < 2_000)
+    fun stoppingEarlyClosesTheConnection() = runBlocking {
+        handler = { exchange ->
+            exchange.sendResponseHeaders(200, 0)
+            try {
+                while (true) {
+                    exchange.responseBody.write("data: ${delta("tick")}\n\n".toByteArray())
+                    exchange.responseBody.flush()
+                    Thread.sleep(20)
+                }
+            } catch (_: IOException) {
+                clientGone.countDown()
+            }
         }
+        val first = backend().use { it.stream(request).first() }
+        assertEquals("tick", first)
+        assertTrue("the server should see the client leave", clientGone.await(5, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun warmUpOpensAConnectionWithoutCredentials() = runBlocking {
+        handler = { plain(it, 404, "") }
+        backend(key = "secret").use { it.warmUp() }
+        assertEquals("HEAD", method.get())
+        assertNull(auth.get())
     }
 
     @Test
