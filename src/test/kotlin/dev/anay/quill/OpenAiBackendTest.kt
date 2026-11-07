@@ -172,6 +172,18 @@ class OpenAiBackendTest {
     }
 
     @Test
+    fun warmUpOnAMisconfiguredEndpointDoesNotThrow() = runBlocking {
+        OpenAiBackend({ Endpoint("http://example.com/v1/completions", "m", "secret", Duration.ofSeconds(1)) }).use { it.warmUp() }
+    }
+
+    @Test
+    fun missingKeyStopsTheStreamBeforeAnythingIsSent() = runBlocking {
+        val failure = runCatching { OpenAiBackend({ throw NotConfiguredException() }).use { it.stream(request).toList() } }.exceptionOrNull()
+        assertTrue(failure is NotConfiguredException)
+        assertNull(method.get())
+    }
+
+    @Test
     fun keyIsNeverSentOverPlainHttpToARemoteHost() {
         try {
             Endpoint("http://example.com/v1/completions", "m", "secret", Duration.ofSeconds(1))

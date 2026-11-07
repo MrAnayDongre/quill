@@ -4,6 +4,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.JsonSyntaxException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -62,13 +63,10 @@ object EndpointPolicy {
  * request with a cursor marker; any other endpoint gets a completions request with the `suffix` field for fill in
  * the middle.
  */
-class OpenAiBackend(
-    private val endpoint: suspend () -> Endpoint,
-    clientFactory: () -> HttpClient = { HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build() },
-) : CompletionBackend, AutoCloseable {
+class OpenAiBackend(private val endpoint: suspend () -> Endpoint) : CompletionBackend, AutoCloseable {
 
     // Building a client loads the TLS stack, so it happens on first use and never on the UI thread.
-    private val clientHolder = lazy(clientFactory)
+    private val clientHolder = lazy { HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build() }
     private val client get() = clientHolder.value
 
     override fun stream(request: CompletionRequest): Flow<String> = callbackFlow {
@@ -95,14 +93,16 @@ class OpenAiBackend(
 
     /** Opens the connection to the endpoint's host ahead of the first request. Sends no credentials. */
     suspend fun warmUp() {
-        val request = HttpRequest.newBuilder(URI(endpoint().url))
-            .timeout(Duration.ofSeconds(5))
-            .method("HEAD", HttpRequest.BodyPublishers.noBody())
-            .build()
         try {
+            val request = HttpRequest.newBuilder(URI(endpoint().url))
+                .timeout(Duration.ofSeconds(5))
+                .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                .build()
             client.sendAsync(request, HttpResponse.BodyHandlers.discarding()).await()
-        } catch (_: IOException) {
-            // A failed warm-up only means the first real request pays for the connection.
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // A failed warm-up only means the first real request pays for the connection; real requests report problems.
         }
     }
 

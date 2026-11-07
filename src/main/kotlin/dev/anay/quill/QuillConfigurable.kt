@@ -23,6 +23,10 @@ private enum class Preset(val label: String, val endpoint: String?, val model: S
     CUSTOM("Custom", null, null);
 
     override fun toString() = label
+
+    companion object {
+        fun forEndpoint(endpoint: String): Preset = entries.firstOrNull { it.endpoint == endpoint } ?: CUSTOM
+    }
 }
 
 class QuillConfigurable : BoundSearchableConfigurable("Quill", "dev.anay.quill.settings") {
@@ -38,7 +42,7 @@ class QuillConfigurable : BoundSearchableConfigurable("Quill", "dev.anay.quill.s
             row { checkBox("Enable inline completion").bindSelected(state::enabled) }
             group("Server") {
                 row("Preset:") {
-                    comboBox(Preset.entries).onChanged { box ->
+                    comboBox(Preset.entries).applyToComponent { selectedItem = Preset.forEndpoint(state.endpoint) }.onChanged { box ->
                         val preset = box.selectedItem as Preset
                         preset.endpoint?.let { endpointField.component.text = it }
                         preset.model?.let { modelField.component.text = it }
@@ -86,5 +90,6 @@ class QuillConfigurable : BoundSearchableConfigurable("Quill", "dev.anay.quill.s
         if (apiKey.isNotEmpty()) ApiKeyStore.getInstance().save(apiKey)
         apiKey = ""
         QuillService.getInstance().keepWarm()
+        QuillService.getInstance().refreshStatusBar()
     }
 }

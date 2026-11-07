@@ -30,13 +30,7 @@ class QuillService(private val scope: CoroutineScope) : Disposable {
         val now = System.currentTimeMillis()
         val last = lastWarmUp.get()
         if (now - last < WARM_INTERVAL_MS || !lastWarmUp.compareAndSet(last, now)) return
-        scope.launch {
-            try {
-                backend.warmUp()
-            } catch (_: NotConfiguredException) {
-                // Nothing to warm up until the user adds a key.
-            }
-        }
+        scope.launch { backend.warmUp() }
     }
 
     /** Runs the settings page "Test connection" with the values currently typed into it. */
@@ -64,7 +58,7 @@ class QuillService(private val scope: CoroutineScope) : Disposable {
         return EngineConfig(state.maxTokens, state.debounceMs.toLong(), REQUEST_TIMEOUT_MS)
     }
 
-    private fun refreshStatusBar() = ApplicationManager.getApplication().invokeLater {
+    fun refreshStatusBar() = ApplicationManager.getApplication().invokeLater {
         for (project in ProjectManager.getInstance().openProjects) {
             WindowManager.getInstance().getStatusBar(project)?.updateWidget(QuillStatusBarFactory.ID)
         }

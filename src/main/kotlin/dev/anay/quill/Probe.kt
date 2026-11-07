@@ -20,6 +20,8 @@ object Probe {
             e.message!!
         } catch (e: BackendException) {
             e.message ?: "The request failed"
+        } catch (e: RuntimeException) {
+            "The request failed: ${e.javaClass.simpleName}"
         }
     }
 }

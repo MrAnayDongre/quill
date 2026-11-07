@@ -1,8 +1,8 @@
 # Quill
 
-Ghost text completion for JetBrains IDEs that shows the first characters of a suggestion in about a quarter of a second, and tells you how fast it is.
+Ghost text completion for JetBrains IDEs that streams suggestions as the model writes them, and shows you how fast it is.
 
-Median time to the first visible character: **250 ms**, against 392 ms until the whole suggestion arrives (20 runs, 418 characters on average, `deepseek-v4.1-flash-fast` on CoralBricks, 2026-11-07, Linux desktop). On a local Ollama `llama3.1` the median was 94 ms against 230 ms.
+Median time from request to the first suggestion character: **250 ms**, against 392 ms until the whole suggestion has arrived. That is 20 runs of a 418 character multi-line completion with `deepseek-v4.1-flash-fast` on CoralBricks, on 2026-11-07 from a Linux desktop. The debounce is not included: it is 20 ms after `.`, `(`, `,`, `{`, `=`, `:` and a newline, and 150 ms by default in the middle of a word. On a local Ollama `llama3.1` (6 runs, 44 characters on average) the median was 94 ms against 230 ms; the 95th percentile was 6.8 s because of a cold model load.
 
 Quill talks to any OpenAI compatible server, so you pick the model and keep the key. Tab accepts a suggestion. The platform's actions for accepting the next word or line are in Settings | Keymap, under "inline completion".
 
@@ -21,7 +21,7 @@ The status bar shows the median time to the first suggestion character (`Quill 2
 - **Streaming ghost text.** Characters appear while the model is still writing. Output is cleaned as it arrives, holding back only the few characters that could still turn into a code fence, a stop sequence or a repeat of the text after the caret. A test feeds a dozen messy answers in every chunk size and checks that the streamed result equals the cleaned whole.
 - **Stops reading early.** When text follows the caret on the same line, the suggestion is a single line, and the request is cancelled at the first newline. The same happens at a stop sequence or a closing fence. That saves latency and tokens.
 - **Adaptive debounce.** After `.`, `(`, `,`, `{`, `=`, `:` and a newline the request goes out almost at once. In the middle of a word it waits the configured delay.
-- **Warm connection.** A credential free request opens the connection when you start working and again after a pause, so the first suggestion does not pay for the TLS handshake.
+- **Warm connection.** A credential free request opens the connection when you start working and again after a pause. In a small test (6 fresh clients each, noisy network) the first request's time to first character had a median of about 660 ms warmed against about 900 ms cold, and the best case was 248 ms against 418 ms.
 - **One request at a time.** A new request cancels the one in flight, all the way down to the HTTP stream. Identical prompts are answered from a small cache.
 - **Latency budget.** If the server's average gets slower than 1.5 seconds, the token allowance shrinks in proportion. With fast servers it never triggers.
 

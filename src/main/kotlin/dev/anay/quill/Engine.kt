@@ -97,15 +97,20 @@ class CompletionEngine(
         val whole = StringBuilder()
         val started = System.nanoTime()
         var firstMs = -1L
+        suspend fun show(piece: String) {
+            if (piece.isEmpty()) return
+            if (firstMs < 0) firstMs = (System.nanoTime() - started) / 1_000_000
+            whole.append(piece)
+            send(piece)
+        }
         try {
             withTimeout(settings.requestTimeoutMs) {
                 backend.stream(request)
                     .transformWhile { delta -> emit(cleaner.feed(delta)); !cleaner.done }
-                    .collect { piece -> show(piece, whole, started)?.let { if (firstMs < 0) firstMs = it } }
+                    .collect { show(it) }
             }
-            show(cleaner.finish(), whole, started)?.let { if (firstMs < 0) firstMs = it }
-            val totalMs = (System.nanoTime() - started) / 1_000_000
-            latency.record(totalMs)
+            show(cleaner.finish())
+            latency.record((System.nanoTime() - started) / 1_000_000)
             if (firstMs >= 0) stats.recordFirstText(firstMs) else stats.markOk()
             reporter.success()
             if (whole.isNotEmpty()) synchronized(cache) { cache[key] = whole.toString() }
@@ -121,14 +126,6 @@ class CompletionEngine(
         } catch (e: RuntimeException) {
             fail("Unexpected error: ${e.javaClass.simpleName}")
         }
-    }
-
-    /** Sends [piece] to the caller; returns the milliseconds since [started] if it was text. */
-    private suspend fun ProducerScope<String>.show(piece: String, whole: StringBuilder, started: Long): Long? {
-        if (piece.isEmpty()) return null
-        whole.append(piece)
-        send(piece)
-        return (System.nanoTime() - started) / 1_000_000
     }
 
     private fun fail(message: String) {
