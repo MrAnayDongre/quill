@@ -25,9 +25,22 @@ The status bar shows the median time to the first suggestion character (`Quill 2
 - **One request at a time.** A new request cancels the one in flight, all the way down to the HTTP stream. Identical prompts are answered from a small cache.
 - **Latency budget.** If the server's average gets slower than 1.5 seconds, the token allowance shrinks in proportion. With fast servers it never triggers.
 
+## Why the suggestions are accurate
+
+Quill gives the model what a person reading the code would look up, using the IDE's own index instead of guessing from text:
+
+- **Enclosing scopes.** The class and function headers around the caret, even when they are far above the prompt window.
+- **Receiver members.** After `receiver.` it lists the members of the receiver's type, the way a completion popup would. The type is found by following the references in the receiver's declaration, so it works for variables, parameters, fields, calls and classes named directly.
+- **Declarations in use.** The signatures of the functions, classes and fields referenced in the last few lines, from anywhere in the project.
+- **Neighbour files.** The first lines of other open or recently edited files.
+
+This uses the reference and name APIs that every language plugin implements, so there is no per language code. It was tested on Java; Kotlin and other languages should work the same way but are not covered by a test yet.
+
+Measured on a small made-up Java project of 8 files, with 11 cross-file completions such as `pricing.applyDiscount(order`, `base.times(` and `order.getCustomer().getLoyaltyTier()`: **11 of 11** began with the right call with project context against **5 of 11** with the same prompt window and no context (`deepseek-v4.1-flash-fast`, 2026-11-07). The score only checks that the suggestion starts with the expected call, and 11 cases is a smoke test, not a benchmark. Median time to the whole suggestion was 324 ms with context against 246 ms without, so the extra context costs roughly 80 ms. Comparisons with other tools have not been run.
+
 ## How a suggestion is made
 
-1. The text before and after the caret is trimmed to a token budget at line boundaries, with the first lines of up to three other open or recent project files added as comments.
+1. The text before and after the caret is trimmed to a token budget at line boundaries, with the context above added as comments.
 2. A `.../v1/completions` endpoint gets `prompt` and `suffix` (the model must support fill in the middle). A `.../v1/chat/completions` endpoint gets the code around a cursor marker as a chat message, which works with chat only models.
 3. The answer streams back, is cleaned, and is shown.
 

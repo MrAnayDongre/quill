@@ -47,7 +47,10 @@ class QuillInlineCompletionProvider : InlineCompletionProvider {
         val after = document.getText(TextRange(caret, minOf(document.textLength, caret + windowChars)))
         val language = request.file.language
         val commentPrefix = LanguageCommenters.INSTANCE.forLanguage(language)?.lineCommentPrefix ?: "//"
-        val context = ContextCollector.collect(request.file.project, file, excludedPatterns)
+        val windowStart = maxOf(0, caret - windowChars)
+        // Symbols first: they are the most specific, and the prompt drops what does not fit from the end.
+        val context = SymbolContext.collect(request.file, caret, windowStart, excludedPatterns) +
+            ContextCollector.collect(request.file.project, file, excludedPatterns)
         val prompt = PromptBuilder.build(before, after, context, commentPrefix, WINDOW_TOKENS)
         val shape = Shape(singleLine = after.substringBefore('\n').isNotBlank(), stops = Cleanup.stopsFor(language.id))
         // A manual request is an explicit ask, so it skips the typing debounce.

@@ -8,6 +8,7 @@
 - OpenAI compatible backend for completions (fill in the middle) and chat completions endpoints
 - Early stop at a stop sequence, a closing fence or the end of the line for single line suggestions
 - Debounce that shortens after structural characters, stale request cancellation and a cache of recent completions
+- Symbol aware context: enclosing scopes, members of the receiver's type, and declarations of symbols used near the caret
 - Connection warm-up that sends no credentials
 - Status bar widget with the median and 95th percentile time to the first suggestion character
 - Settings page with presets, a connection test, and the API key kept in the IDE password safe
