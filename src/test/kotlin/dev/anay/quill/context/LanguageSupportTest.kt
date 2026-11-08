@@ -30,13 +30,28 @@ class LanguageSupportTest : BasePlatformTestCase() {
         assertEquals(listOf("shout"), problems("shout(1)\n")?.names)
     }
 
-    fun testTypeScriptReceiverMembersWorkAndVerificationDoesNotGetInTheWay() {
+    fun testTypeScriptReceiverMembersAndVerification() {
         myFixture.addFileToProject("order.ts", "export class Order {\n    addLine(product: string, quantity: number): void {}\n    subtotal(): number { return 1; }\n}\n")
         myFixture.configureByText("checkout.ts", "import { Order } from './order';\nfunction checkout(order: Order) {\n    order.<caret>\n}\n")
         val text = snippets().joinToString("\n") { "${it.path}\n${it.text}" }
         assertTrue(text, text.contains("addLine(product: string, quantity: number)"))
         assertNull(problems("addLine('x', 1);\n"))
-        // Unknown properties are not reported as unresolved references in TypeScript, so checking never blocks here.
-        assertNull(problems("shout(1);\n"))
+        assertEquals(listOf("shout"), problems("shout(1);\n")?.names)
+    }
+
+    fun testPythonReceiverMembersAndVerification() {
+        myFixture.addFileToProject("order.py", "class Order:\n    def add_line(self, product: str, quantity: int) -> None:\n        pass\n\n    def subtotal(self) -> int:\n        return 1\n")
+        myFixture.configureByText("checkout.py", "from order import Order\n\n\ndef checkout(order: Order):\n    order.<caret>\n")
+        val text = snippets().joinToString("\n") { "${it.path}\n${it.text}" }
+        assertTrue(text, text.contains("add_line"))
+        assertNull(problems("add_line('x', 1)\n"))
+        assertEquals(listOf("shout"), problems("shout(1)\n")?.names)
+    }
+
+    fun testPythonInventedFunctionIsCaught() {
+        myFixture.addFileToProject("order.py", "class Order:\n    def add_line(self, product: str, quantity: int) -> None:\n        pass\n")
+        myFixture.configureByText("checkout.py", "from order import Order\n\n\ndef checkout(order: Order):\n    <caret>\n")
+        assertNull(problems("order.add_line('x', 1)\n"))
+        assertEquals(listOf("price_of"), problems("price_of(order)\n")?.names)
     }
 }

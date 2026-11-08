@@ -15,6 +15,8 @@ dependencies {
         intellijIdea("2026.2.3")
         testFramework(TestFrameworkType.Platform)
         testBundledPlugins("com.intellij.modules.ultimate", "com.intellij.java", "org.jetbrains.kotlin", "JavaScript")
+        testPlugin("PythonCore", "262.11879.100")
+        testPlugin("Pythonid", "262.11879.100")
     }
 }
 

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Platform tests for TypeScript and Python next to Java and Kotlin
 - Ghost text completion through the platform inline completion API, streamed as the model writes
 - OpenAI compatible backend for completions (fill in the middle) and chat completions endpoints
 - Early stop at a stop sequence, a closing fence or the end of the line for single line suggestions

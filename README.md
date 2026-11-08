@@ -35,7 +35,7 @@ Quill gives the model what a person reading the code would look up, using the ID
 - **Recent edits.** The last few lines you changed, in any file, because what someone just did is the best hint of what they do next. Text from excluded files is never kept.
 - **Neighbour files.** The first lines of other open or recently edited files.
 
-This uses the reference and name APIs that every language plugin implements, so there is no per language code. Tested on Java and Kotlin (the context and the check both work) and on TypeScript (the context works; in the test the check did not flag an invented member, and the cause was not confirmed: it may be how TypeScript references resolve, or the file being judged unfit). Python is not covered: the IDE used for testing has no Python support.
+This uses the reference and name APIs that every language plugin implements, so there is no per language code. Tested on Java, Kotlin, TypeScript and Python (the context and the check, in platform tests with each language's plugin). Limits: the check can only judge what the IDE can resolve, so a file whose imports or SDK are not set up is left unchecked. Untyped Python values were not tested.
 
 ## Measured
 

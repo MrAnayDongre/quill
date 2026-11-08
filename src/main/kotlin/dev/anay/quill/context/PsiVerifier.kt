@@ -7,6 +7,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.PsiPolyVariantReference
 import com.intellij.psi.PsiReference
+import com.intellij.psi.impl.source.PsiFileImpl
 import com.intellij.psi.util.PsiTreeUtil
 import dev.anay.quill.completion.NameRepair
 import dev.anay.quill.completion.Problems
@@ -42,6 +43,7 @@ internal class PsiVerifier(
         if (!file.isValid || DumbService.isDumb(file.project)) return emptyList()
         val text = StringBuilder(original).insert(caret, candidate)
         val copy = PsiFileFactory.getInstance(file.project).createFileFromText(text, file) ?: return emptyList()
+        (copy as? PsiFileImpl)?.originalFile = file
         val added = unresolved(copy, caret, caret + candidate.length).filter { it.end > caret }
         if (added.isEmpty()) return emptyList()
         // One unknown type (no SDK, a dynamic language, code being written) makes every member access on it unknown
@@ -61,8 +63,13 @@ internal class PsiVerifier(
             ProgressManager.checkCanceled()
             val parent = leaf.parent
             if (parent != null && visited.add(parent)) {
-                for (ref in parent.references) {
+                val refs = parent.references
+                for (ref in refs) {
                     if (ref.isSoft || !isUnresolved(ref)) continue
+                    // Some languages stack several references on one piece of text (a TypeScript module path has a
+                    // whole-path one that never resolves beside one per segment that do); the text is fine when
+                    // a reference inside it resolves.
+                    if (refs.any { it !== ref && ref.rangeInElement.contains(it.rangeInElement) && !isUnresolved(it) }) continue
                     val name = ref.rangeInElement.substring(ref.element.text)
                     if (name.isNotBlank()) found += Unknown(name, ref.element.textRange.startOffset + ref.rangeInElement.endOffset, ref.element.textRange.startOffset - caret)
                 }
